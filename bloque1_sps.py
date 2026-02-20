@@ -139,26 +139,27 @@ from scipy import stats
 def calculate_chi2_robust(data, dist_name, params, n_params_est):
     """
     Realiza el test Chi-Cuadrado con agrupación dinámica (binning) 
-    y normalización de probabilidades para cumplir criterios estadísticos.
+    y normalización de probabilidades.
     """
-    # Preparar conteos
     observed_counts = pd.Series(data).value_counts().sort_index()
     total_n = len(data)
     k_values = np.arange(observed_counts.index.min(), observed_counts.index.max() + 1)
     
-    # Calcular PMF teórica
+    # --- Selección de PMF teórica ---
     if dist_name == 'poisson':
-        mu = params[0]
-        probs = stats.poisson.pmf(k_values, mu)
+        probs = stats.poisson.pmf(k_values, params[0])
     elif dist_name == 'geom':
-        p, loc = params
-        probs = stats.geom.pmf(k_values, p, loc=loc)
+        probs = stats.geom.pmf(k_values, params[0], loc=params[1])
     elif dist_name == 'binom':
-        n, p = params
-        probs = stats.binom.pmf(k_values, n, p)
+        probs = stats.binom.pmf(k_values, params[0], params[1])
     elif dist_name == 'nbinom':
-        n, p = params
-        probs = stats.nbinom.pmf(k_values, n, p)
+        probs = stats.nbinom.pmf(k_values, params[0], params[1])
+    elif dist_name == 'hypergeom':
+        # M, n, N = params
+        probs = stats.hypergeom.pmf(k_values, params[0], params[1], params[2])
+    elif dist_name == 'multinomial':
+        # En el caso univariante, la multinomial se comporta como las frecuencias relativas
+        probs = params[0] 
         
     expected_freqs = probs * total_n
     
@@ -176,8 +177,7 @@ def calculate_chi2_robust(data, dist_name, params, n_params_est):
         if curr_exp >= 5:
             obs_grouped.append(curr_obs)
             exp_grouped.append(curr_exp)
-            curr_obs = 0
-            curr_exp = 0
+            curr_obs, curr_exp = 0, 0
             
     if curr_exp > 0:
         if len(exp_grouped) > 0:
@@ -187,13 +187,12 @@ def calculate_chi2_robust(data, dist_name, params, n_params_est):
             exp_grouped.append(curr_exp)
             obs_grouped.append(curr_obs)
 
-    # Normalización final
     obs_final = np.array(obs_grouped)
     exp_final = np.array(exp_grouped)
+    
     if np.sum(exp_final) > 0:
         exp_final = exp_final * (np.sum(obs_final) / np.sum(exp_final))
 
-    # Test
     n_bins = len(exp_final)
     dof = n_bins - 1 - n_params_est
     
@@ -201,34 +200,25 @@ def calculate_chi2_robust(data, dist_name, params, n_params_est):
         return np.nan, np.nan
         
     chi2_stat, p_val = stats.chisquare(f_obs=obs_final, f_exp=exp_final, ddof=n_params_est)
-    
     return chi2_stat, p_val
 
 # ------------------------------------------------------------------------------
 # 2. FUNCIÓN PRINCIPAL (Ajuste + Reporte Visual)
 # ------------------------------------------------------------------------------
 def best_fit_discrete(data):
-    """
-    Ajusta modelos discretos, calcula Chi2, imprime un reporte profesional
-    y devuelve el DataFrame con los resultados.
-    """
-    # Limpieza de datos
     x = np.array(data)
-    x = x[~np.isnan(x)]
+    x = x[~np.isnan(x)].astype(int)
     if len(x) == 0: 
         print("❌ Error: No hay datos válidos.")
         return pd.DataFrame()
     
-    # Estadísticos muestrales
     mu = np.mean(x)
     var = np.var(x, ddof=1)
-    min_val = np.min(x)
+    min_val, max_val = np.min(x), np.max(x)
     if var == 0: var = 1e-6
     if mu == 0: mu = 1e-6
     
     results = []
-    
-    # --- AJUSTE DE MODELOS ---
     
     # 1. Poisson
     chi2, p = calculate_chi2_robust(x, 'poisson', [mu], 1)
@@ -240,68 +230,51 @@ def best_fit_discrete(data):
     chi2, p = calculate_chi2_robust(x, 'geom', [p_geom, loc_geom], 1)
     results.append({'Modelo': lbl, 'Parámetros_Txt': f'p={p_geom:.3f}', 'Chi2': chi2, 'P-Value': p, 'Params_Dict': {'p': p_geom, 'loc': loc_geom}})
     
-    # 3. Binomial (Solo si Var < Mean)
+    # 3. Binomial
     if var < mu:
         p_bin = 1 - (var/mu)
-        n_bin = max(int(round(mu/p_bin)), int(np.max(x)))
+        n_bin = max(int(round(mu/p_bin)), max_val)
         p_bin_adj = mu/n_bin
         chi2, p = calculate_chi2_robust(x, 'binom', [n_bin, p_bin_adj], 2)
         results.append({'Modelo': 'Binomial', 'Parámetros_Txt': f'n={n_bin}, p={p_bin_adj:.2f}', 'Chi2': chi2, 'P-Value': p, 'Params_Dict': {'n': n_bin, 'p': p_bin_adj}})
-    else:
-        results.append({'Modelo': 'Binomial', 'Parámetros_Txt': '-', 'Chi2': np.nan, 'P-Value': 0, 'Params_Dict': {}})
-
-    # 4. Binomial Negativa (Solo si Var > Mean)
+    
+    # 4. Binomial Negativa
     if var > mu:
         p_nbin = mu/var
         n_val = (mu**2)/(var-mu)
         chi2, p = calculate_chi2_robust(x, 'nbinom', [n_val, p_nbin], 2)
         results.append({'Modelo': 'Binomial Negativa', 'Parámetros_Txt': f'r={n_val:.2f}, p={p_nbin:.2f}', 'Chi2': chi2, 'P-Value': p, 'Params_Dict': {'n': n_val, 'p': p_nbin}})
-    else:
-        results.append({'Modelo': 'Binomial Negativa', 'Parámetros_Txt': '-', 'Chi2': np.nan, 'P-Value': 0, 'Params_Dict': {}})
+
+    # 5. Hipergeométrica (Estimación aproximada M=Población total estimada)
+    # M: total objetos, n: éxitos en población, N: muestras extraídas
+    M_hyper = max_val * 10 
+    n_hyper = int(M_hyper * (mu / max_val)) if max_val > 0 else 0
+    N_hyper = max_val
+    if M_hyper > n_hyper and n_hyper > 0:
+        chi2, p = calculate_chi2_robust(x, 'hypergeom', [M_hyper, n_hyper, N_hyper], 3)
+        results.append({'Modelo': 'Hipergeométrica', 'Parámetros_Txt': f'M={M_hyper}, n={n_hyper}, N={N_hyper}', 'Chi2': chi2, 'P-Value': p, 'Params_Dict': {'M': M_hyper, 'n': n_hyper, 'N': N_hyper}})
+
+    # 6. Multinomial (Basada en frecuencias empíricas de las categorías presentes)
+    counts = pd.Series(x).value_counts(normalize=True).sort_index().values
+    chi2, p = calculate_chi2_robust(x, 'multinomial', [counts], len(counts)-1)
+    results.append({'Modelo': 'Multinomial (Empírica)', 'Parámetros_Txt': f'K={len(counts)} categorías', 'Chi2': chi2, 'P-Value': p, 'Params_Dict': {'probs': counts}})
 
     # --- PROCESAMIENTO FINAL ---
     df = pd.DataFrame(results).dropna(subset=['Chi2'])
-    
-    if df.empty:
-        print("⚠️ No se pudo ajustar ningún modelo válido (¿pocos datos?).")
-        return df
+    if df.empty: return df
 
-    # Crear columnas visuales y ordenar
     df['Decision'] = df['P-Value'].apply(lambda val: '✅ Aceptable' if val > 0.05 else '❌ Rechazado')
     df = df.sort_values(by='P-Value', ascending=False).reset_index(drop=True)
 
-    # --- IMPRESIÓN DEL REPORTE "BONITO" ---
+    # Imprimir Reporte
     print("\n" + "═"*75)
     print("📊  RESULTADOS DEL AJUSTE DE DISTRIBUCIONES (CHI-CUADRADO)")
     print("═"*75)
-    
-    # Imprimir tabla limpia
-    cols_visuales = ['Modelo', 'Parámetros_Txt', 'Chi2', 'P-Value', 'Decision']
-    # Formato de pandas para que se vea alineado
-    print(df[cols_visuales].to_string(index=False, formatters={
-        'Chi2': '{:,.4f}'.format,
-        'P-Value': '{:,.4f}'.format
-    }))
+    print(df[['Modelo', 'Parámetros_Txt', 'Chi2', 'P-Value', 'Decision']].to_string(index=False, formatters={'Chi2': '{:,.4f}'.format, 'P-Value': '{:,.4f}'.format}))
     print("─"*75)
-
-    # --- CONCLUSIÓN AUTOMÁTICA ---
-    best_row = df.iloc[0]
-    best_model = best_row['Modelo']
-    best_p = best_row['P-Value']
-    best_params = best_row['Params_Dict']
-
-    print(f"\n🏆  MEJOR MODELO SELECCIONADO: \033[1m{best_model}\033[0m")
     
-    if best_p > 0.05:
-        print(f"    ✅ Ajuste estadísticamente válido (P-Value: {best_p:.4f} > 0.05).")
-        print("       No hay evidencia suficiente para rechazar que los datos sigan esta distribución.")
-    else:
-        print(f"    ⚠️  Ajuste pobre (P-Value: {best_p:.4f} < 0.05).")
-        print("       El modelo es la mejor opción disponible, pero estadísticamente no es perfecto.")
-
-    print(f"\n⚙️  PARÁMETROS TÉCNICOS (Diccionario):")
-    print(f"    {best_params}")
-    print("═"*75 + "\n")
+    best_row = df.iloc[0]
+    print(f"\n🏆  MEJOR MODELO: {best_row['Modelo']} (P-Value: {best_row['P-Value']:.4f})")
     
     return df
   
