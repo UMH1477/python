@@ -459,45 +459,4 @@ def gof_continuous(data):
     # params = ganador['Params_Dict']
     
     return df
-  
-#============================================================================================
-# CMTD
-#============================================================================================
 
-# Calcular la matriz de transición de n pasos
-def cmtd_matrix_n(mc, n):
-  """
-  Función para obtener la matriz de transición de n pasos
-  dada un proceso definido con MarkovChain()
-
-  Parámetros de entrada:
-    - mc: proceso definido con MarkovChain()
-    - n: número de saltos.
-
-  Parámetros de salida:
-    - p_n: matriz de transición de n pasos.
-  """
-  import pydtmc
-  mtn  = pydtmc.MarkovChain(np.linalg.matrix_power(mc.p, n), mc.states)
-  return pd.DataFrame(mtn.p,columns=mc.states,index=mc.states)
-#--------------------------------------------------------------------------------------
-# Matriz de tiempos de ocupación
-def mat_ocupacion_proceso(mc, n):
-  """
-  Función para obtener la matriz de ocupación asocida al proceso mc en n transiciones
-
-  Parámetros de entrada:
-  - mc: proceso
-  - n: número de transiciones
-
-  Parámetros de salida:
-  - mocupa: matriz de ocupacion
-  """
-  mocupa = np.zeros((len(mc.states), len(mc.states)))
-  for i in range(n+1):
-    mocupa += np.linalg.matrix_power(mc.p, i)
-
-  return mocupa
-  import pydtmc
-  mtn  = pydtmc.MarkovChain(np.linalg.matrix_power(mc.p, n), mc.states)
-  return pd.DataFrame(mtn.p,columns=mc.states,index=mc.states)
