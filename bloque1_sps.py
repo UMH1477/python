@@ -157,10 +157,7 @@ def calculate_chi2_robust(data, dist_name, params, n_params_est):
     elif dist_name == 'hypergeom':
         # M, n, N = params
         probs = stats.hypergeom.pmf(k_values, params[0], params[1], params[2])
-    elif dist_name == 'multinomial':
-        # En el caso univariante, la multinomial se comporta como las frecuencias relativas
-        probs = params[0] 
-        
+            
     expected_freqs = probs * total_n
     
     # Mapear observados
@@ -253,11 +250,6 @@ def best_fit_discrete(data):
     if M_hyper > n_hyper and n_hyper > 0:
         chi2, p = calculate_chi2_robust(x, 'hypergeom', [M_hyper, n_hyper, N_hyper], 3)
         results.append({'Modelo': 'Hipergeométrica', 'Parámetros_Txt': f'M={M_hyper}, n={n_hyper}, N={N_hyper}', 'Chi2': chi2, 'P-Value': p, 'Params_Dict': {'M': M_hyper, 'n': n_hyper, 'N': N_hyper}})
-
-    # 6. Multinomial (Basada en frecuencias empíricas de las categorías presentes)
-    counts = pd.Series(x).value_counts(normalize=True).sort_index().values
-    chi2, p = calculate_chi2_robust(x, 'multinomial', [counts], len(counts)-1)
-    results.append({'Modelo': 'Multinomial (Empírica)', 'Parámetros_Txt': f'K={len(counts)} categorías', 'Chi2': chi2, 'P-Value': p, 'Params_Dict': {'probs': counts}})
 
     # --- PROCESAMIENTO FINAL ---
     df = pd.DataFrame(results).dropna(subset=['Chi2'])
