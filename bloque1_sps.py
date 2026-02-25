@@ -127,14 +127,14 @@ def MC_estim(sims):
   return([round(estim,4), round(ic_low,4), round(ic_up,4)])
 
 #============================================================================================
-# AJUSTAR Y COMPARAR DISTRIBUCIONES DISCRETAS GOF con chi-cuadrado
+# AJUSTAR Y COMPARAR DISTRIBUCIONES DISCRETAS/CONTINUAS
 #============================================================================================
 import numpy as np
 import pandas as pd
 from scipy import stats
 
 # ------------------------------------------------------------------------------
-# 1. FUNCIÓN AUXILIAR (Cálculo matemático riguroso)
+# 1. FUNCIÓN AUXILIAR  para chequear y comparar distribuciones discretas
 # ------------------------------------------------------------------------------
 def calculate_chi2_robust(data, dist_name, params, n_params_est):
     """
@@ -200,78 +200,9 @@ def calculate_chi2_robust(data, dist_name, params, n_params_est):
     return chi2_stat, p_val
 
 # ------------------------------------------------------------------------------
-# 2. FUNCIÓN PRINCIPAL (Ajuste + Reporte Visual)
-# ------------------------------------------------------------------------------
-def best_fit_discrete(data):
-    x = np.array(data)
-    x = x[~np.isnan(x)].astype(int)
-    if len(x) == 0: 
-        print("❌ Error: No hay datos válidos.")
-        return pd.DataFrame()
-    
-    mu = np.mean(x)
-    var = np.var(x, ddof=1)
-    min_val, max_val = np.min(x), np.max(x)
-    if var == 0: var = 1e-6
-    if mu == 0: mu = 1e-6
-    
-    results = []
-    
-    # 1. Poisson
-    chi2, p = calculate_chi2_robust(x, 'poisson', [mu], 1)
-    results.append({'Modelo': 'Poisson', 'Parámetros_Txt': f'λ={mu:.2f}', 'Chi2': chi2, 'P-Value': p, 'Params_Dict': {'mu': mu}})
-    
-    # 2. Geométrica
-    if min_val == 0: p_geom = 1/(mu+1); loc_geom = -1; lbl = 'Geom (desde 0)'
-    else: p_geom = 1/mu; loc_geom = 0; lbl = 'Geom (desde 1)'
-    chi2, p = calculate_chi2_robust(x, 'geom', [p_geom, loc_geom], 1)
-    results.append({'Modelo': lbl, 'Parámetros_Txt': f'p={p_geom:.3f}', 'Chi2': chi2, 'P-Value': p, 'Params_Dict': {'p': p_geom, 'loc': loc_geom}})
-    
-    # 3. Binomial
-    if var < mu:
-        p_bin = 1 - (var/mu)
-        n_bin = max(int(round(mu/p_bin)), max_val)
-        p_bin_adj = mu/n_bin
-        chi2, p = calculate_chi2_robust(x, 'binom', [n_bin, p_bin_adj], 2)
-        results.append({'Modelo': 'Binomial', 'Parámetros_Txt': f'n={n_bin}, p={p_bin_adj:.2f}', 'Chi2': chi2, 'P-Value': p, 'Params_Dict': {'n': n_bin, 'p': p_bin_adj}})
-    
-    # 4. Binomial Negativa
-    if var > mu:
-        p_nbin = mu/var
-        n_val = (mu**2)/(var-mu)
-        chi2, p = calculate_chi2_robust(x, 'nbinom', [n_val, p_nbin], 2)
-        results.append({'Modelo': 'Binomial Negativa', 'Parámetros_Txt': f'r={n_val:.2f}, p={p_nbin:.2f}', 'Chi2': chi2, 'P-Value': p, 'Params_Dict': {'n': n_val, 'p': p_nbin}})
-
-    # 5. Hipergeométrica (Estimación aproximada M=Población total estimada)
-    # M: total objetos, n: éxitos en población, N: muestras extraídas
-    M_hyper = max_val * 10 
-    n_hyper = int(M_hyper * (mu / max_val)) if max_val > 0 else 0
-    N_hyper = max_val
-    if M_hyper > n_hyper and n_hyper > 0:
-        chi2, p = calculate_chi2_robust(x, 'hypergeom', [M_hyper, n_hyper, N_hyper], 3)
-        results.append({'Modelo': 'Hipergeométrica', 'Parámetros_Txt': f'M={M_hyper}, n={n_hyper}, N={N_hyper}', 'Chi2': chi2, 'P-Value': p, 'Params_Dict': {'M': M_hyper, 'n': n_hyper, 'N': N_hyper}})
-
-    # --- PROCESAMIENTO FINAL ---
-    df = pd.DataFrame(results).dropna(subset=['Chi2'])
-    if df.empty: return df
-
-    df['Decision'] = df['P-Value'].apply(lambda val: '✅ Aceptable' if val > 0.05 else '❌ Rechazado')
-    df = df.sort_values(by='P-Value', ascending=False).reset_index(drop=True)
-
-    # Imprimir Reporte
-    print("\n" + "═"*75)
-    print("📊  RESULTADOS DEL AJUSTE DE DISTRIBUCIONES (CHI-CUADRADO)")
-    print("═"*75)
-    print(df[['Modelo', 'Parámetros_Txt', 'Chi2', 'P-Value', 'Decision']].to_string(index=False, formatters={'Chi2': '{:,.4f}'.format, 'P-Value': '{:,.4f}'.format}))
-    print("─"*75)
-    
-    best_row = df.iloc[0]
-    print(f"\n🏆  MEJOR MODELO: {best_row['Modelo']} (P-Value: {best_row['P-Value']:.4f})")
-    
-    return df
-  
+ 
 #============================================================================================
-# AJUSTE Y COMPARACIÓN DE DISTRIBUCIONES CONTINUAS GOF
+# 2. AJUSTE Y COMPARACIÓN DE DISTRIBUCIONES CONTINUAS GOF (Básico. Mejorada con best_fit_continuous
 #============================================================================================
 
 def gof_continuous(data):
@@ -459,18 +390,106 @@ def gof_continuous(data):
     # params = ganador['Params_Dict']
     
     return df
-#------------------------------------------------------------------------------
-# MEJORA DE LA FUNCIÓN gof_continuous
-import numpy as np
-import pandas as pd
-from scipy import stats, optimize
-from scipy.special import gamma
-import warnings
+# ==============================================================================
+# ==============================================================================
+# 3. FUNCIÓN PARA AJUSTAR Y COMPARAR DISTRIBUCIONES DISCRETAS
+# ==============================================================================
+def best_fit_discrete(data):
+    '''Ajusta diversas distribuciones discretas a unos datos, las testea con el 
+    test chi-cuadrado, las compara, y extrae la mejor'''
+  
+    x = np.array(data)
+    x = x[~np.isnan(x)].astype(int)
+    
+    if len(x) == 0: 
+        print("❌ Error: No hay datos válidos.")
+        return pd.DataFrame(), np.nan
+    
+    mu = np.mean(x)
+    var = np.var(x, ddof=1)
+    min_val, max_val = np.min(x), np.max(x)
+    if var == 0: var = 1e-6
+    if mu == 0: mu = 1e-6
+    
+    results = []
+    
+    # 1. Poisson
+    chi2, p = calculate_chi2_robust(x, 'poisson', [mu], 1)
+    results.append({'Distribución': 'Poisson', 'Parámetros_Txt': f'λ={mu:.2f}', 'Chi2': chi2, 'P-Value': p, 'Params_Dict': {'mu': mu}})
+    
+    # 2. Geométrica
+    if min_val == 0: p_geom = 1/(mu+1); loc_geom = -1; lbl = 'Geom (desde 0)'
+    else: p_geom = 1/mu; loc_geom = 0; lbl = 'Geom (desde 1)'
+    chi2, p = calculate_chi2_robust(x, 'geom', [p_geom, loc_geom], 1)
+    results.append({'Distribución': lbl, 'Parámetros_Txt': f'p={p_geom:.3f}', 'Chi2': chi2, 'P-Value': p, 'Params_Dict': {'p': p_geom, 'loc': loc_geom}})
+    
+    # 3. Binomial
+    if var < mu:
+        p_bin = 1 - (var/mu)
+        n_bin = max(int(round(mu/p_bin)), max_val)
+        p_bin_adj = mu/n_bin
+        chi2, p = calculate_chi2_robust(x, 'binom', [n_bin, p_bin_adj], 2)
+        results.append({'Distribución': 'Binomial', 'Parámetros_Txt': f'n={n_bin}, p={p_bin_adj:.2f}', 'Chi2': chi2, 'P-Value': p, 'Params_Dict': {'n': n_bin, 'p': p_bin_adj}})
+    
+    # 4. Binomial Negativa
+    if var > mu:
+        p_nbin = mu/var
+        n_val = (mu**2)/(var-mu)
+        chi2, p = calculate_chi2_robust(x, 'nbinom', [n_val, p_nbin], 2)
+        results.append({'Distribución': 'Binomial Negativa', 'Parámetros_Txt': f'r={n_val:.2f}, p={p_nbin:.2f}', 'Chi2': chi2, 'P-Value': p, 'Params_Dict': {'n': n_val, 'p': p_nbin}})
 
-def best_gof_continuous(data):
+    # 5. Hipergeométrica 
+    M_hyper = max_val * 10 
+    n_hyper = int(M_hyper * (mu / max_val)) if max_val > 0 else 0
+    N_hyper = max_val
+    if M_hyper > n_hyper and n_hyper > 0:
+        chi2, p = calculate_chi2_robust(x, 'hypergeom', [M_hyper, n_hyper, N_hyper], 3)
+        results.append({'Distribución': 'Hipergeométrica', 'Parámetros_Txt': f'M={M_hyper}, n={n_hyper}, N={N_hyper}', 'Chi2': chi2, 'P-Value': p, 'Params_Dict': {'M': M_hyper, 'n': n_hyper, 'N': N_hyper}})
+
+    # --- PROCESAMIENTO FINAL ---
+    df = pd.DataFrame(results).dropna(subset=['Chi2'])
+    if df.empty: return df, np.nan
+
+    df['Decision'] = df['P-Value'].apply(lambda val: '✅ Aceptable' if val > 0.05 else '❌ Rechazado')
+    df = df.sort_values(by='P-Value', ascending=False).reset_index(drop=True)
+
+    # Imprimir Reporte
+    print("\n" + "═"*80)
+    print("📊  RESULTADOS DEL AJUSTE (DISTRIBUCIONES DISCRETAS - CHI-CUADRADO)")
+    print("═"*80)
+    print(df[['Distribución', 'Parámetros_Txt', 'Chi2', 'P-Value', 'Decision']].to_string(index=False, formatters={'Chi2': '{:,.4f}'.format, 'P-Value': '{:,.4f}'.format}))
+    print("─"*80)
+    
+    best_row = df.iloc[0]
+    print(f"\n🏆  MEJOR AJUSTE POSICIONADO: \033[1m{best_row['Distribución']}\033[0m")
+    print(f"    P-Value: {best_row['P-Value']:.4f}")
+    
+    if best_row['P-Value'] > 0.05:
+        print("    ✅ El ajuste es estadísticamente aceptable.")
+        print(f"\n⚙️  PARÁMETROS TÉCNICOS:")
+        print(f"    {best_row['Params_Dict']}")
+        print("═"*80 + "\n")
+        
+        # Estructura unificada de salida
+        best = {
+            'Distribución': best_row['Distribución'],
+            'params': best_row['Params_Dict']
+        }
+        return df, best
+    else:
+        print("    ❌ ALERTA: La mejor distribución no supera el umbral del test Chi-Cuadrado.")
+        print("    ⚠️  Los datos empíricos no se ajustan a ninguna de las distribuciones modeladas.")
+        print("═"*80 + "\n")
+        return df, np.nan
+
+
+# ==============================================================================
+# 4. FUNCIÓN PARA AJUSTAR Y COMPARAR DISTRIBUCIONES CONTINUAS
+# ==============================================================================
+def best_fit_continuous(data):
     """
     Ajusta distribuciones continuas (MOM) y genera un reporte visual profesional.
-    Si la mejor distribución no supera el test KS (P-Value > 0.05), devuelve np.nan.
+    Si la mejor distribución no supera el test KS (P-Value > 0.05), devuelve np.nan en el diccionario.
     """
     
     # 1. Preparación de datos
@@ -490,7 +509,7 @@ def best_gof_continuous(data):
     # 🛡️ PROTECCIÓN 1: Evitar ajustar distribuciones a constantes
     if std == 0:
         print("❌ Error: Los datos no tienen varianza (son todos idénticos). Imposible ajustar.")
-        return pd.DataFrame(), mu
+        return pd.DataFrame(), np.nan
     
     results = []
 
@@ -498,122 +517,66 @@ def best_gof_continuous(data):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=RuntimeWarning)
 
-        # ==============================================================================
         # 1. UNIFORME
-        # ==============================================================================
         range_uni = np.sqrt(12 * var)
         uni_a = mu - (range_uni / 2)
         uni_scale = range_uni
-        
         d, p = stats.kstest(x, 'uniform', args=(uni_a, uni_scale))
-        results.append({
-            'Distribución': 'Uniforme',
-            'Parámetros_Txt': f'Min={uni_a:.2f}, Range={uni_scale:.2f}',
-            'Params_Dict': {'loc': uni_a, 'scale': uni_scale},
-            'KS Stat': d, 'P-Value': p
-        })
+        results.append({'Distribución': 'Uniforme', 'Parámetros_Txt': f'Min={uni_a:.2f}, Range={uni_scale:.2f}', 'Params_Dict': {'loc': uni_a, 'scale': uni_scale}, 'KS Stat': d, 'P-Value': p})
 
-        # ==============================================================================
         # 2. EXPONENCIAL
-        # ==============================================================================
         if mu > 0:
             exp_scale = mu
             d, p = stats.kstest(x, 'expon', args=(0, exp_scale))
-            results.append({
-                'Distribución': 'Exponencial',
-                'Parámetros_Txt': f'Scale={exp_scale:.2f}',
-                'Params_Dict': {'loc': 0, 'scale': exp_scale},
-                'KS Stat': d, 'P-Value': p
-            })
+            results.append({'Distribución': 'Exponencial', 'Parámetros_Txt': f'Scale={exp_scale:.2f}', 'Params_Dict': {'loc': 0, 'scale': exp_scale}, 'KS Stat': d, 'P-Value': p})
 
-        # ==============================================================================
         # 3. NORMAL
-        # ==============================================================================
         d, p = stats.kstest(x, 'norm', args=(mu, std))
-        results.append({
-            'Distribución': 'Normal',
-            'Parámetros_Txt': f'Mu={mu:.2f}, Std={std:.2f}',
-            'Params_Dict': {'loc': mu, 'scale': std},
-            'KS Stat': d, 'P-Value': p
-        })
+        results.append({'Distribución': 'Normal', 'Parámetros_Txt': f'Mu={mu:.2f}, Std={std:.2f}', 'Params_Dict': {'loc': mu, 'scale': std}, 'KS Stat': d, 'P-Value': p})
 
-        # ==============================================================================
         # 4. GAMMA
-        # ==============================================================================
         if var > 0 and mu > 0:
             gam_scale = var / mu
             gam_a = (mu ** 2) / var
             d, p = stats.kstest(x, 'gamma', args=(gam_a, 0, gam_scale))
-            results.append({
-                'Distribución': 'Gamma',
-                'Parámetros_Txt': f'Alpha={gam_a:.2f}, Beta={gam_scale:.2f}',
-                'Params_Dict': {'a': gam_a, 'loc': 0, 'scale': gam_scale},
-                'KS Stat': d, 'P-Value': p
-            })
+            results.append({'Distribución': 'Gamma', 'Parámetros_Txt': f'Alpha={gam_a:.2f}, Beta={gam_scale:.2f}', 'Params_Dict': {'a': gam_a, 'loc': 0, 'scale': gam_scale}, 'KS Stat': d, 'P-Value': p})
 
-        # ==============================================================================
-        # 5. ERLANG (Gamma con shape entero)
-        # ==============================================================================
+        # 5. ERLANG 
         if var > 0 and mu > 0:
             erl_k = max(1, round((mu ** 2) / var))
             erl_scale = mu / erl_k
             d, p = stats.kstest(x, 'gamma', args=(erl_k, 0, erl_scale))
-            results.append({
-                'Distribución': 'Erlang',
-                'Parámetros_Txt': f'k={int(erl_k)}, Beta={erl_scale:.2f}',
-                'Params_Dict': {'a': erl_k, 'loc': 0, 'scale': erl_scale},
-                'KS Stat': d, 'P-Value': p
-            })
+            results.append({'Distribución': 'Erlang', 'Parámetros_Txt': f'k={int(erl_k)}, Beta={erl_scale:.2f}', 'Params_Dict': {'a': erl_k, 'loc': 0, 'scale': erl_scale}, 'KS Stat': d, 'P-Value': p})
 
-        # ==============================================================================
         # 6. TRIANGULAR
-        # ==============================================================================
         tri_loc = x_min
         tri_scale = x_max - x_min
         mode_est = 3 * mu - x_min - x_max
-        mode_est = max(x_min, min(x_max, mode_est)) # Clamp inicial
+        mode_est = max(x_min, min(x_max, mode_est))
         
         if tri_scale > 0:
             tri_c = (mode_est - tri_loc) / tri_scale
-            # 🛡️ PROTECCIÓN 3: Evitar c=0 o c=1 estricto que causa el warning
             tri_c = np.clip(tri_c, 1e-5, 1 - 1e-5)
-            
             d, p = stats.kstest(x, 'triang', args=(tri_c, tri_loc, tri_scale))
-            results.append({
-                'Distribución': 'Triangular',
-                'Parámetros_Txt': f'c={tri_c:.2f}, Loc={tri_loc:.2f}, Scale={tri_scale:.2f}',
-                'Params_Dict': {'c': tri_c, 'loc': tri_loc, 'scale': tri_scale},
-                'KS Stat': d, 'P-Value': p
-            })
+            results.append({'Distribución': 'Triangular', 'Parámetros_Txt': f'c={tri_c:.2f}, Loc={tri_loc:.2f}, Scale={tri_scale:.2f}', 'Params_Dict': {'c': tri_c, 'loc': tri_loc, 'scale': tri_scale}, 'KS Stat': d, 'P-Value': p})
 
-        # ==============================================================================
         # 7. WEIBULL
-        # ==============================================================================
         if mu > 0 and std > 0:
             cv_sq = (std / mu) ** 2
             def weibull_eq(k):
                 if k <= 0: return 100.0
                 return (gamma(1 + 2/k) / (gamma(1 + 1/k)**2)) - 1 - cv_sq
 
-            try:
-                wei_k = optimize.fsolve(weibull_eq, 1.0)[0]
-            except:
-                wei_k = 1.0
+            try: wei_k = optimize.fsolve(weibull_eq, 1.0)[0]
+            except: wei_k = 1.0
             
             if wei_k > 0:
                 wei_scale = mu / gamma(1 + 1/wei_k)
                 d, p = stats.kstest(x, 'weibull_min', args=(wei_k, 0, wei_scale))
-                results.append({
-                    'Distribución': 'Weibull',
-                    'Parámetros_Txt': f'Shape={wei_k:.2f}, Scale={wei_scale:.2f}',
-                    'Params_Dict': {'c': wei_k, 'loc': 0, 'scale': wei_scale},
-                    'KS Stat': d, 'P-Value': p
-                })
+                results.append({'Distribución': 'Weibull', 'Parámetros_Txt': f'Shape={wei_k:.2f}, Scale={wei_scale:.2f}', 'Params_Dict': {'c': wei_k, 'loc': 0, 'scale': wei_scale}, 'KS Stat': d, 'P-Value': p})
 
-        # ==============================================================================
         # 8. LOG-NORMAL
-        # ==============================================================================
-        if np.min(x) > 0: # Solo si todos son positivos
+        if np.min(x) > 0: 
             phi = np.sqrt(var + mu**2)
             mu_log = np.log(mu**2 / phi)
             sigma_log = np.sqrt(np.log(phi**2 / mu**2))
@@ -621,12 +584,7 @@ def best_gof_continuous(data):
             
             if sigma_log > 0:
                 d, p = stats.kstest(x, 'lognorm', args=(sigma_log, 0, scale_log))
-                results.append({
-                    'Distribución': 'Log-Normal',
-                    'Parámetros_Txt': f's={sigma_log:.2f}, Scale={scale_log:.2f}',
-                    'Params_Dict': {'s': sigma_log, 'loc': 0, 'scale': scale_log},
-                    'KS Stat': d, 'P-Value': p
-                })
+                results.append({'Distribución': 'Log-Normal', 'Parámetros_Txt': f's={sigma_log:.2f}, Scale={scale_log:.2f}', 'Params_Dict': {'s': sigma_log, 'loc': 0, 'scale': scale_log}, 'KS Stat': d, 'P-Value': p})
 
     # --- PROCESAMIENTO FINAL ---
     df = pd.DataFrame(results)
@@ -641,22 +599,24 @@ def best_gof_continuous(data):
     print("═"*80)
     
     cols_show = ['Distribución', 'Parámetros_Txt', 'KS Stat', 'P-Value', 'Decision']
-    print(df[cols_show].to_string(index=False, formatters={
-        'KS Stat': '{:.4f}'.format,
-        'P-Value': '{:.4f}'.format
-    }))
+    print(df[cols_show].to_string(index=False, formatters={'KS Stat': '{:.4f}'.format, 'P-Value': '{:.4f}'.format}))
     print("─"*80)
 
-    # Ganador y validación estricta
-    best = df.iloc[0]
-    print(f"\n🏆  MEJOR AJUSTE POSICIONADO: \033[1m{best['Distribución']}\033[0m")
-    print(f"    P-Value: {best['P-Value']:.4f}")
+    best_row = df.iloc[0]
+    print(f"\n🏆  MEJOR AJUSTE POSICIONADO: \033[1m{best_row['Distribución']}\033[0m")
+    print(f"    P-Value: {best_row['P-Value']:.4f}")
     
-    if best['P-Value'] > 0.05:
+    if best_row['P-Value'] > 0.05:
         print("    ✅ El ajuste es estadísticamente aceptable.")
         print(f"\n⚙️  PARÁMETROS TÉCNICOS (Para Scipy):")
-        print(f"    {best['Params_Dict']}")
+        print(f"    {best_row['Params_Dict']}")
         print("═"*80 + "\n")
+        
+        # Estructura unificada de salida
+        best = {
+            'Distribución': best_row['Distribución'],
+            'params': best_row['Params_Dict']
+        }
         return df, best
     else:
         print("    ❌ ALERTA: La mejor distribución no supera el umbral del test KS.")
@@ -664,30 +624,38 @@ def best_gof_continuous(data):
         print("═"*80 + "\n")
         return df, np.nan
 
-#-------------------------------------------------------------------------------------
-# definición de la distribución de probabilidad en scipy.stats
+# ==============================================================================
+# 5. FUNCIÓN PARA TRANSFORMAR EN UN OBJETO SCIPY.STATS LA DISTRIBUCIÓN GANADORA
+# DE best_fit_discrete o best_fit_continuous
+# ==============================================================================
 
 def obtener_distribucion_ganadora(resultados):
     """
-    Toma el output de best_gof_continuous() y genera un objeto de distribución 
-    'congelado' de scipy.stats. Si la entrada es inválida o np.nan, 
-    cancela la operación de forma segura.
+    Toma el output de best_fit_continuous() o best_fit_discrete() y genera 
+    un objeto de distribución 'congelado' de scipy.stats. 
+    Si la entrada es inválida o np.nan, cancela la operación de forma segura.
     """
-    # 1. VALIDACIÓN ESTRICTA DE LA ENTRADA
-    # Comprobamos si no es un DataFrame (ej. es np.nan) o si está vacío
-    if not isinstance(resultados[0], pd.DataFrame) or isinstance(resultados[1],float) \
-      or (isinstance(resultados[1],float) and np.isnan(resultados[1])) or resultados[0].empty:
-        print("❌ Operación cancelada: No se ha detectado un ajuste válido (NaN).")
+    # 1. VALIDACIÓN LIMPIA Y ROBUSTA
+    # Esperamos una tupla (df, diccionario_o_nan)
+    if not isinstance(resultados, tuple) or len(resultados) != 2:
+        print("❌ Error: Formato de entrada incorrecto. Se esperaba una tupla (df, dict/nan).")
+        return None
+        
+    df, ganador = resultados
+    
+    # Comprobamos si el ajuste falló (ganador es np.nan o no es un diccionario)
+    if not isinstance(ganador, dict):
+        print("❌ Operación cancelada: No se ha detectado un ajuste estadísticamente válido.")
         print("⚠️ Imposible instanciar la variable aleatoria para simulación.")
-        return resultados[1] 
+        return np.nan 
 
     # 2. EXTRACCIÓN DEL GANADOR
-    ganador = resultados[1]
-    nombre_dist = ganador['Distribución']
-    parametros = ganador['Params_Dict']
+    nombre_dist = ganador.get('Distribución')
+    parametros = ganador.get('params', {})
 
-    # 3. MAPEO CON SCIPY.STATS
+    # 3. MAPEO CON SCIPY.STATS (Continuas y Discretas)
     mapa_distribuciones = {
+        # Continuas
         'Uniforme': stats.uniform,
         'Exponencial': stats.expon,
         'Normal': stats.norm,
@@ -695,19 +663,32 @@ def obtener_distribucion_ganadora(resultados):
         'Erlang': stats.erlang,
         'Triangular': stats.triang,
         'Weibull': stats.weibull_min,
-        'Log-Normal': stats.lognorm
+        'Log-Normal': stats.lognorm,
+        
+        # Discretas
+        'Poisson': stats.poisson,
+        'Geom (desde 1)': stats.geom,
+        'Geom (desde 0)': stats.geom,
+        'Binomial': stats.binom,
+        'Binomial Negativa': stats.nbinom,
+        'Hipergeométrica': stats.hypergeom
     }
 
     if nombre_dist not in mapa_distribuciones:
-        print(f"❌ Error interno: La distribución '{nombre_dist}' no está entre \
-         nuestras distribuciones válidas.")
-        print("⚠️ Imposible instanciar la variable aleatoria para simulación")
+        print(f"❌ Error interno: La distribución '{nombre_dist}' no está en el mapa de scipy.stats.")
         return None
 
     # 4. INSTANCIACIÓN DE LA DISTRIBUCIÓN
-    dist_class = mapa_distribuciones[nombre_dist]
-    dist_congelada = dist_class(**parametros)
-    
-    print(f"✅ Variable aleatoria '{nombre_dist}' instanciada correctamente y lista para Monte Carlo.")
-    
-    return dist_congelada
+    try:
+        dist_class = mapa_distribuciones[nombre_dist]
+        
+        # El operador ** desempaqueta el diccionario como argumentos con nombre
+        dist_congelada = dist_class(**parametros) 
+        
+        print(f"✅ Variable aleatoria '{nombre_dist}' instanciada correctamente.")
+        print(f"   Puedes usar métodos como .rvs(), .pdf()/.pmf(), o .cdf().")
+        return dist_congelada
+        
+    except Exception as e:
+        print(f"❌ Error al intentar instanciar la distribución: {e}")
+        return None
