@@ -672,23 +672,27 @@ def best_fit_continuous(data):
 
 def obtener_distribucion_ganadora(resultados):
     """
-    Toma el output de best_fit_continuous() o best_fit_discrete() y genera 
-    un objeto de distribución 'congelado' de scipy.stats. 
+    Toma el output de best_fit_continuous() o best_fit_discrete() y genera
+    un objeto de distribución 'congelado' de scipy.stats.
     Si la entrada es inválida o np.nan, cancela la operación de forma segura.
+    Devuelve tres objetos (en una lista):
+    [0] es la distribución de scipy.stats
+    [1] es el nombre del modelo ajustado
+    [2] son los parámetros de ese modelo
     """
     # 1. VALIDACIÓN LIMPIA Y ROBUSTA
     # Esperamos una tupla (df, diccionario_o_nan)
     if not isinstance(resultados, tuple) or len(resultados) != 2:
         print("❌ Error: Formato de entrada incorrecto. Se esperaba una tupla (df, dict/nan).")
         return None
-        
+
     df, ganador = resultados
-    
+
     # Comprobamos si el ajuste falló (ganador es np.nan o no es un diccionario)
     if not isinstance(ganador, dict):
         print("❌ Operación cancelada: No se ha detectado un ajuste estadísticamente válido.")
         print("⚠️ Imposible instanciar la variable aleatoria para simulación.")
-        return np.nan 
+        return np.nan
 
     # 2. EXTRACCIÓN DEL GANADOR
     nombre_dist = ganador.get('Distribución')
@@ -705,7 +709,7 @@ def obtener_distribucion_ganadora(resultados):
         'Triangular': stats.triang,
         'Weibull': stats.weibull_min,
         'Log-Normal': stats.lognorm,
-        
+
         # Discretas
         'Poisson': stats.poisson,
         'Geom (desde 1)': stats.geom,
@@ -722,14 +726,14 @@ def obtener_distribucion_ganadora(resultados):
     # 4. INSTANCIACIÓN DE LA DISTRIBUCIÓN
     try:
         dist_class = mapa_distribuciones[nombre_dist]
-        
+
         # El operador ** desempaqueta el diccionario como argumentos con nombre
-        dist_congelada = dist_class(**parametros) 
-        
+        dist_stats = dist_class(**parametros)
+
         print(f"✅ Variable aleatoria '{nombre_dist}' instanciada correctamente.")
         print(f"   Puedes usar métodos como .rvs(), .pdf()/.pmf(), o .cdf().")
-        return dist_congelada
-        
+        return dist_stats, nombre_dist, parametros
+
     except Exception as e:
         print(f"❌ Error al intentar instanciar la distribución: {e}")
         return None
