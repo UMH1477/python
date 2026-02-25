@@ -730,9 +730,12 @@ def obtener_distribucion_ganadora(resultados):
         # El operador ** desempaqueta el diccionario como argumentos con nombre
         dist_stats = dist_class(**parametros)
 
+        print("."*100)
         print(f"✅ Variable aleatoria '{nombre_dist}' instanciada correctamente.")
-        print(f"   Puedes usar métodos como .rvs(), .pdf()/.pmf(), o .cdf().")
-        return dist_stats, nombre_dist, parametros
+        print(f"con parámetros {parametros}")
+        print("."*100)
+      
+        return dist_stats
 
     except Exception as e:
         print(f"❌ Error al intentar instanciar la distribución: {e}")
