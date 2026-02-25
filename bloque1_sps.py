@@ -394,10 +394,13 @@ def gof_continuous(data):
 # ==============================================================================
 # 3. FUNCIÓN PARA AJUSTAR Y COMPARAR DISTRIBUCIONES DISCRETAS
 # ==============================================================================
-def best_fit_discrete(data):
-    '''Ajusta diversas distribuciones discretas a unos datos, las testea con el 
-    test chi-cuadrado, las compara, y extrae la mejor'''
-  
+def best_fit_discrete(data, tol_vmr=0.15):
+    """
+    Ajusta distribuciones discretas a los datos.
+    Aplica el principio de parsimonia con dos reglas:
+    1. Si Varianza/Media ≈ 1, da preferencia a Poisson frente a Binomial Negativa.
+    2. Si tanto Binomial como Poisson superan el test (p > 0.05), prioriza Poisson.
+    """
     x = np.array(data)
     x = x[~np.isnan(x)].astype(int)
     
@@ -453,10 +456,49 @@ def best_fit_discrete(data):
     df['Decision'] = df['P-Value'].apply(lambda val: '✅ Aceptable' if val > 0.05 else '❌ Rechazado')
     df = df.sort_values(by='P-Value', ascending=False).reset_index(drop=True)
 
+    # 🌟 LÓGICAS DE PREFERENCIA (PRINCIPIO DE PARSIMONIA) 🌟
+    vmr = var / mu  
+    mensajes_parsimonia = []
+    
+    # REGLA 1: Parsimonia por Índice de Dispersión (V/M ≈ 1)
+    if (1 - tol_vmr) <= vmr <= (1 + tol_vmr):
+        idx_poisson_lista = df.index[(df['Distribución'] == 'Poisson') & (df['Decision'] == '✅ Aceptable')].tolist()
+        if idx_poisson_lista:
+            idx = idx_poisson_lista[0]
+            if idx != 0:
+                row_poisson = df.iloc[[idx]]
+                df = pd.concat([row_poisson, df.drop(idx)]).reset_index(drop=True)
+                mensajes_parsimonia.append("Se ha forzado a Poisson al 1º puesto por Índice de Dispersión (V/M ≈ 1).")
+
+    # REGLA 2: Si Binomial y Poisson son aceptables, Poisson debe ganar a Binomial
+    idx_poisson_acc = df.index[(df['Distribución'] == 'Poisson') & (df['Decision'] == '✅ Aceptable')].tolist()
+    idx_binom_acc = df.index[(df['Distribución'] == 'Binomial') & (df['Decision'] == '✅ Aceptable')].tolist()
+
+    if idx_poisson_acc and idx_binom_acc:
+        idx_p = idx_poisson_acc[0]
+        idx_b = idx_binom_acc[0]
+        
+        # Si la Binomial está mejor posicionada que la Poisson, subimos la Poisson
+        if idx_b < idx_p:
+            row_p = df.iloc[[idx_p]]
+            df_sin_p = df.drop(idx_p).reset_index(drop=True)
+            # Insertamos Poisson justo antes de la Binomial
+            df = pd.concat([df_sin_p.iloc[:idx_b], row_p, df_sin_p.iloc[idx_b:]]).reset_index(drop=True)
+            
+            msg = "Se ha priorizado Poisson sobre Binomial (ambas son aceptables, pero Poisson es un modelo más simple)."
+            if msg not in mensajes_parsimonia:
+                mensajes_parsimonia.append(msg)
+
     # Imprimir Reporte
     print("\n" + "═"*80)
     print("📊  RESULTADOS DEL AJUSTE (DISTRIBUCIONES DISCRETAS - CHI-CUADRADO)")
     print("═"*80)
+    print(f"    Estadísticos de la muestra -> Media: {mu:.3f} | Varianza: {var:.3f} | Índice Dispersión (V/M): {vmr:.2f}")
+    
+    for msg in mensajes_parsimonia:
+        print(f"    💡 INFO: {msg}")
+        
+    print("─"*80)
     print(df[['Distribución', 'Parámetros_Txt', 'Chi2', 'P-Value', 'Decision']].to_string(index=False, formatters={'Chi2': '{:,.4f}'.format, 'P-Value': '{:,.4f}'.format}))
     print("─"*80)
     
@@ -470,12 +512,11 @@ def best_fit_discrete(data):
         print(f"    {best_row['Params_Dict']}")
         print("═"*80 + "\n")
         
-        # Estructura unificada de salida
-        best = {
+        best_dict = {
             'Distribución': best_row['Distribución'],
             'params': best_row['Params_Dict']
         }
-        return df, best
+        return df, best_dict
     else:
         print("    ❌ ALERTA: La mejor distribución no supera el umbral del test Chi-Cuadrado.")
         print("    ⚠️  Los datos empíricos no se ajustan a ninguna de las distribuciones modeladas.")
