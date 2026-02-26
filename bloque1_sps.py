@@ -527,143 +527,240 @@ def best_fit_discrete(data, tol_vmr=0.15):
 # ==============================================================================
 # 4. FUNCIÓN PARA AJUSTAR Y COMPARAR DISTRIBUCIONES CONTINUAS
 # ==============================================================================
-def best_fit_continuous(data):
+import numpy as np
+import pandas as pd
+import warnings
+
+from scipy import stats, optimize
+from scipy.special import gamma, gammaln
+from scipy.optimize import OptimizeWarning
+
+
+def best_fit_continuous(data, alpha=0.05, verbose=True):
     """
-    Ajusta distribuciones continuas (MOM) y genera un reporte visual profesional.
-    Si la mejor distribución no supera el test KS (P-Value > 0.05), devuelve np.nan en el diccionario.
+    Ajusta varias distribuciones continuas por MOM (y algunas por fórmulas cerradas)
+    y evalúa con KS-test. Devuelve (df_resultados, best) donde best es:
+      - {'Distribución': str, 'params': dict} si el mejor pasa KS (p>alpha)
+      - np.nan si ninguna pasa KS
     """
-    
-    # 1. Preparación de datos
-    x = np.array(data)
-    x = x[~np.isnan(x)]
-    if len(x) == 0:
-        print("❌ Error: No hay datos válidos.")
+    # 1) Preparación robusta de datos
+    x = np.asarray(data, dtype=float)
+    x = x[np.isfinite(x)]
+    n = x.size
+    if n == 0:
+        if verbose:
+            print("❌ Error: No hay datos válidos.")
+        return pd.DataFrame(), np.nan
+    if n < 3:
+        if verbose:
+            print("❌ Error: Se necesitan al menos 3 datos válidos para un ajuste razonable.")
         return pd.DataFrame(), np.nan
 
-    # Estadísticos básicos
-    mu = np.mean(x)
-    var = np.var(x, ddof=1)
-    std = np.std(x, ddof=1)
-    x_min = np.min(x)
-    x_max = np.max(x)
-    
-    # 🛡️ PROTECCIÓN 1: Evitar ajustar distribuciones a constantes
-    if std == 0:
-        print("❌ Error: Los datos no tienen varianza (son todos idénticos). Imposible ajustar.")
+    mu = float(np.mean(x))
+    var = float(np.var(x, ddof=1))
+    std = float(np.sqrt(var)) if var > 0 else 0.0
+    x_min = float(np.min(x))
+    x_max = float(np.max(x))
+
+    # Protección: datos constantes o varianza no utilizable
+    if not np.isfinite(std) or std <= 0:
+        if verbose:
+            print("❌ Error: Los datos no tienen varianza (son todos idénticos) o no es utilizable.")
         return pd.DataFrame(), np.nan
-    
+
     results = []
 
-    # 🛡️ PROTECCIÓN 2: Silenciar los warnings matemáticos internos de SciPy
+    def _safe_kstest(dist, dist_name, params_txt, params_dict):
+        """
+        KS test robusto: usa CDF del objeto scipy.stats para evitar strings/args raros.
+        Si falla o devuelve NaN, no añade resultado.
+        """
+        try:
+            d, p = stats.kstest(x, dist.cdf)
+            if np.isfinite(d) and np.isfinite(p):
+                results.append({
+                    "Distribución": dist_name,
+                    "Parámetros_Txt": params_txt,
+                    "Params_Dict": params_dict,
+                    "KS Stat": float(d),
+                    "P-Value": float(p),
+                })
+        except Exception:
+            # Si una distro explota numéricamente, se ignora sin romper el proceso.
+            return
+
+    # Silenciar warnings típicos de SciPy (overflow/invalid/optimize)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=RuntimeWarning)
+        warnings.simplefilter("ignore", category=OptimizeWarning)
 
-        # 1. UNIFORME
-        range_uni = np.sqrt(12 * var)
-        uni_a = mu - (range_uni / 2)
-        uni_scale = range_uni
-        d, p = stats.kstest(x, 'uniform', args=(uni_a, uni_scale))
-        results.append({'Distribución': 'Uniforme', 'Parámetros_Txt': f'Min={uni_a:.2f}, Range={uni_scale:.2f}', 'Params_Dict': {'loc': uni_a, 'scale': uni_scale}, 'KS Stat': d, 'P-Value': p})
+        # 1) UNIFORME (MOM)
+        if var > 0:
+            range_uni = np.sqrt(12.0 * var)
+            if np.isfinite(range_uni) and range_uni > 0:
+                uni_loc = mu - range_uni / 2.0
+                uni_scale = range_uni
+                dist = stats.uniform(loc=uni_loc, scale=uni_scale)
+                _safe_kstest(
+                    dist,
+                    "Uniforme",
+                    f"Min={uni_loc:.4f}, Range={uni_scale:.4f}",
+                    {"loc": uni_loc, "scale": uni_scale},
+                )
 
-        # 2. EXPONENCIAL
-        if mu > 0:
+        # 2) EXPONENCIAL (MOM) — requiere soporte >=0 si fijamos loc=0
+        if mu > 0 and x_min >= 0:
             exp_scale = mu
-            d, p = stats.kstest(x, 'expon', args=(0, exp_scale))
-            results.append({'Distribución': 'Exponencial', 'Parámetros_Txt': f'Scale={exp_scale:.2f}', 'Params_Dict': {'loc': 0, 'scale': exp_scale}, 'KS Stat': d, 'P-Value': p})
+            dist = stats.expon(loc=0.0, scale=exp_scale)
+            _safe_kstest(
+                dist,
+                "Exponencial",
+                f"Scale={exp_scale:.4f}",
+                {"loc": 0.0, "scale": exp_scale},
+            )
 
-        # 3. NORMAL
-        d, p = stats.kstest(x, 'norm', args=(mu, std))
-        results.append({'Distribución': 'Normal', 'Parámetros_Txt': f'Mu={mu:.2f}, Std={std:.2f}', 'Params_Dict': {'loc': mu, 'scale': std}, 'KS Stat': d, 'P-Value': p})
+        # 3) NORMAL (MOM)
+        dist = stats.norm(loc=mu, scale=std)
+        _safe_kstest(
+            dist,
+            "Normal",
+            f"Mu={mu:.4f}, Std={std:.4f}",
+            {"loc": mu, "scale": std},
+        )
 
-        # 4. GAMMA
-        if var > 0 and mu > 0:
+        # 4) GAMMA (MOM) — con loc=0 requiere x>=0
+        if mu > 0 and var > 0 and x_min >= 0:
             gam_scale = var / mu
-            gam_a = (mu ** 2) / var
-            d, p = stats.kstest(x, 'gamma', args=(gam_a, 0, gam_scale))
-            results.append({'Distribución': 'Gamma', 'Parámetros_Txt': f'Alpha={gam_a:.2f}, Beta={gam_scale:.2f}', 'Params_Dict': {'a': gam_a, 'loc': 0, 'scale': gam_scale}, 'KS Stat': d, 'P-Value': p})
+            gam_a = (mu * mu) / var
+            if np.isfinite(gam_a) and np.isfinite(gam_scale) and gam_a > 0 and gam_scale > 0:
+                dist = stats.gamma(a=gam_a, loc=0.0, scale=gam_scale)
+                _safe_kstest(
+                    dist,
+                    "Gamma",
+                    f"Alpha={gam_a:.4f}, Beta={gam_scale:.4f}",
+                    {"a": gam_a, "loc": 0.0, "scale": gam_scale},
+                )
 
-        # 5. ERLANG 
-        if var > 0 and mu > 0:
-            erl_k = max(1, round((mu ** 2) / var))
+        # 5) ERLANG (aprox. MOM) — gamma con k entero; requiere x>=0
+        if mu > 0 and var > 0 and x_min >= 0:
+            erl_k = int(max(1, round((mu * mu) / var)))
             erl_scale = mu / erl_k
-            d, p = stats.kstest(x, 'gamma', args=(erl_k, 0, erl_scale))
-            results.append({'Distribución': 'Erlang', 'Parámetros_Txt': f'k={int(erl_k)}, Beta={erl_scale:.2f}', 'Params_Dict': {'a': erl_k, 'loc': 0, 'scale': erl_scale}, 'KS Stat': d, 'P-Value': p})
+            if np.isfinite(erl_scale) and erl_scale > 0:
+                dist = stats.gamma(a=erl_k, loc=0.0, scale=erl_scale)
+                _safe_kstest(
+                    dist,
+                    "Erlang",
+                    f"k={erl_k}, Beta={erl_scale:.4f}",
+                    {"a": erl_k, "loc": 0.0, "scale": erl_scale},
+                )
 
-        # 6. TRIANGULAR
+        # 6) TRIANGULAR (MOM aprox con modo estimado)
         tri_loc = x_min
         tri_scale = x_max - x_min
-        mode_est = 3 * mu - x_min - x_max
-        mode_est = max(x_min, min(x_max, mode_est))
-        
-        if tri_scale > 0:
+        if np.isfinite(tri_scale) and tri_scale > 0:
+            mode_est = 3.0 * mu - x_min - x_max
+            mode_est = float(np.clip(mode_est, x_min, x_max))
             tri_c = (mode_est - tri_loc) / tri_scale
-            tri_c = np.clip(tri_c, 1e-5, 1 - 1e-5)
-            d, p = stats.kstest(x, 'triang', args=(tri_c, tri_loc, tri_scale))
-            results.append({'Distribución': 'Triangular', 'Parámetros_Txt': f'c={tri_c:.2f}, Loc={tri_loc:.2f}, Scale={tri_scale:.2f}', 'Params_Dict': {'c': tri_c, 'loc': tri_loc, 'scale': tri_scale}, 'KS Stat': d, 'P-Value': p})
+            tri_c = float(np.clip(tri_c, 1e-6, 1.0 - 1e-6))
+            dist = stats.triang(c=tri_c, loc=tri_loc, scale=tri_scale)
+            _safe_kstest(
+                dist,
+                "Triangular",
+                f"c={tri_c:.4f}, Loc={tri_loc:.4f}, Scale={tri_scale:.4f}",
+                {"c": tri_c, "loc": tri_loc, "scale": tri_scale},
+            )
 
-        # 7. WEIBULL
-        if mu > 0 and std > 0:
+        # 7) WEIBULL (resolver shape k por CV con brentq, más estable que fsolve)
+        # Requiere x>0 si fijamos loc=0
+        if mu > 0 and std > 0 and x_min > 0:
             cv_sq = (std / mu) ** 2
+
+            # E(k) = Gamma(1+2/k) / Gamma(1+1/k)^2 - 1 - cv^2
+            # Usamos log-gamma para evitar overflows: exp(logGamma(..) - 2*logGamma(..))
             def weibull_eq(k):
-                if k <= 0: return 100.0
-                return (gamma(1 + 2/k) / (gamma(1 + 1/k)**2)) - 1 - cv_sq
+                if k <= 0:
+                    return np.inf
+                lg1 = gammaln(1.0 + 2.0 / k)
+                lg2 = gammaln(1.0 + 1.0 / k)
+                ratio = np.exp(lg1 - 2.0 * lg2)
+                return ratio - 1.0 - cv_sq
 
-            try: wei_k = optimize.fsolve(weibull_eq, 1.0)[0]
-            except: wei_k = 1.0
-            
-            if wei_k > 0:
-                wei_scale = mu / gamma(1 + 1/wei_k)
-                d, p = stats.kstest(x, 'weibull_min', args=(wei_k, 0, wei_scale))
-                results.append({'Distribución': 'Weibull', 'Parámetros_Txt': f'Shape={wei_k:.2f}, Scale={wei_scale:.2f}', 'Params_Dict': {'c': wei_k, 'loc': 0, 'scale': wei_scale}, 'KS Stat': d, 'P-Value': p})
+            wei_k = None
+            # bracket típico razonable
+            a, b = 1e-3, 1e3
+            try:
+                fa, fb = weibull_eq(a), weibull_eq(b)
+                if np.isfinite(fa) and np.isfinite(fb) and fa * fb < 0:
+                    wei_k = float(optimize.brentq(weibull_eq, a, b, maxiter=200))
+            except Exception:
+                wei_k = None
 
-        # 8. LOG-NORMAL
-        if np.min(x) > 0: 
-            phi = np.sqrt(var + mu**2)
-            mu_log = np.log(mu**2 / phi)
-            sigma_log = np.sqrt(np.log(phi**2 / mu**2))
-            scale_log = np.exp(mu_log)
-            
-            if sigma_log > 0:
-                d, p = stats.kstest(x, 'lognorm', args=(sigma_log, 0, scale_log))
-                results.append({'Distribución': 'Log-Normal', 'Parámetros_Txt': f's={sigma_log:.2f}, Scale={scale_log:.2f}', 'Params_Dict': {'s': sigma_log, 'loc': 0, 'scale': scale_log}, 'KS Stat': d, 'P-Value': p})
+            if wei_k is not None and wei_k > 0:
+                wei_scale = mu / gamma(1.0 + 1.0 / wei_k)
+                if np.isfinite(wei_scale) and wei_scale > 0:
+                    dist = stats.weibull_min(c=wei_k, loc=0.0, scale=wei_scale)
+                    _safe_kstest(
+                        dist,
+                        "Weibull",
+                        f"Shape={wei_k:.4f}, Scale={wei_scale:.4f}",
+                        {"c": wei_k, "loc": 0.0, "scale": wei_scale},
+                    )
 
-    # --- PROCESAMIENTO FINAL ---
+        # 8) LOG-NORMAL (MOM) — requiere x>0
+        if x_min > 0 and mu > 0 and var > 0:
+            phi = np.sqrt(var + mu * mu)
+            if np.isfinite(phi) and phi > 0:
+                mu_log = np.log((mu * mu) / phi)
+                sigma_log = np.sqrt(np.log((phi * phi) / (mu * mu)))
+                scale_log = float(np.exp(mu_log))
+                if np.isfinite(sigma_log) and sigma_log > 0 and np.isfinite(scale_log) and scale_log > 0:
+                    dist = stats.lognorm(s=sigma_log, loc=0.0, scale=scale_log)
+                    _safe_kstest(
+                        dist,
+                        "Log-Normal",
+                        f"s={sigma_log:.4f}, Scale={scale_log:.4f}",
+                        {"s": sigma_log, "loc": 0.0, "scale": scale_log},
+                    )
+
+    # 3) Procesamiento final
     df = pd.DataFrame(results)
-    if df.empty: return df, np.nan
+    if df.empty:
+        if verbose:
+            print("❌ No se pudo evaluar ninguna distribución (datos fuera de soporte o problemas numéricos).")
+        return df, np.nan
 
-    df['Decision'] = df['P-Value'].apply(lambda val: '✅ Aceptable' if val > 0.05 else '❌ Rechazado')
-    df = df.sort_values(by='P-Value', ascending=False).reset_index(drop=True)
+    df["Decision"] = np.where(df["P-Value"] > alpha, "✅ Aceptable", "❌ Rechazado")
+    df = df.sort_values(by="P-Value", ascending=False).reset_index(drop=True)
 
-    # --- REPORTE VISUAL ---
-    print("\n" + "═"*80)
-    print("📊  RESULTADOS DEL AJUSTE (DISTRIBUCIONES CONTINUAS - KS TEST)")
-    print("═"*80)
-    
-    cols_show = ['Distribución', 'Parámetros_Txt', 'KS Stat', 'P-Value', 'Decision']
-    print(df[cols_show].to_string(index=False, formatters={'KS Stat': '{:.4f}'.format, 'P-Value': '{:.4f}'.format}))
-    print("─"*80)
+    if verbose:
+        print("\n" + "═" * 80)
+        print("📊  RESULTADOS DEL AJUSTE (DISTRIBUCIONES CONTINUAS - KS TEST)")
+        print("═" * 80)
+        cols_show = ["Distribución", "Parámetros_Txt", "KS Stat", "P-Value", "Decision"]
+        print(df[cols_show].to_string(
+            index=False,
+            formatters={"KS Stat": "{:.4f}".format, "P-Value": "{:.4f}".format}
+        ))
+        print("─" * 80)
+        best_row = df.iloc[0]
+        print(f"\n🏆  MEJOR AJUSTE POSICIONADO: {best_row['Distribución']}")
+        print(f"    P-Value: {best_row['P-Value']:.4f}")
 
     best_row = df.iloc[0]
-    print(f"\n🏆  MEJOR AJUSTE POSICIONADO: \033[1m{best_row['Distribución']}\033[0m")
-    print(f"    P-Value: {best_row['P-Value']:.4f}")
-    
-    if best_row['P-Value'] > 0.05:
-        print("    ✅ El ajuste es estadísticamente aceptable.")
-        print(f"\n⚙️  PARÁMETROS TÉCNICOS (Para Scipy):")
-        print(f"    {best_row['Params_Dict']}")
-        print("═"*80 + "\n")
-        
-        # Estructura unificada de salida
-        best = {
-            'Distribución': best_row['Distribución'],
-            'params': best_row['Params_Dict']
-        }
+    if best_row["P-Value"] > alpha:
+        best = {"Distribución": best_row["Distribución"], "params": best_row["Params_Dict"]}
+        if verbose:
+            print("    ✅ El ajuste es estadísticamente aceptable.")
+            print("\n⚙️  PARÁMETROS TÉCNICOS (Para SciPy):")
+            print(f"    {best_row['Params_Dict']}")
+            print("═" * 80 + "\n")
         return df, best
-    else:
+
+    if verbose:
         print("    ❌ ALERTA: La mejor distribución no supera el umbral del test KS.")
-        print("    ⚠️  Los datos empíricos no se ajustan a ninguna de las distribuciones teóricas modeladas.")
-        print("═"*80 + "\n")
-        return df, np.nan
+        print("    ⚠️  No hay ajuste aceptable entre las distribuciones evaluadas.")
+        print("═" * 80 + "\n")
+    return df, np.nan
 
 # ==============================================================================
 # 5. FUNCIÓN PARA TRANSFORMAR EN UN OBJETO SCIPY.STATS LA DISTRIBUCIÓN GANADORA
