@@ -7,6 +7,9 @@ Original file is located at
     https://colab.research.google.com/drive/1ouWdD_hfb8hSlpNdJSdN2vI-KHk5Uwye
 """
 
+############# CONFIGURACIÓN INICIAL ##############
+##################################################
+
 # Commented out IPython magic to ensure Python compatibility.
 import numpy as np          # importamos numpy como np
 import pandas as pd         # importamos pandas como pd
@@ -23,9 +26,21 @@ import seaborn as sns
 sns.set_theme(style = 'whitegrid')
 # %config InlineBackend.figure_format = 'retina'
 
+#===============================================
+# Cargar funciones variables aleatorias
+from urllib.request import urlretrieve
+import re # for text manipulation
+
+url = 'https://raw.githubusercontent.com/asunmayoral/umh1477/refs/heads/main/bloque1_sps.py'
+urlretrieve(url, 'bloque1_sps.py')
+import bloque1_sps
+from bloque1_sps import *
+
+#========================================================================
+###################### Funciones para CMTC ##############################
+#========================================================================
 
 # Función para la rerpesentación gráfica de la función de probabildiad y de distribución de una variable aleatoria discreta
-
 def graficar_discreta(x, fx):
   """
   Función para representar gráficamente la función de masa de probabilidad y la función de distribución de una variable discreta.
@@ -86,32 +101,8 @@ def distr_discreta(x, fx):
   fdist = [sum(fx[:(l+1)]) for l in range(len(fx))]
   return(pd.DataFrame({"x": x, "fmp":fx, "fdist":fdist}))
 
-# Función para obtener el estimador Monte Carlo de h(x) y un intervalo de confianza al 95%
-def MC_estim(sims):
-  """
-  Función para obtener el estimador Monte Carlo de h(x) y un intervalo de confianza al 95%
-
-  Args:
-   sims: Si queremos un estimador de h(x) pasamos directamente als simulaciones,
-          mientras que si deseamos una probabildiad debemos pasar el vector 1-0
-          que cumple con las condiciones de la probabilidad buscada
-
-  Returns: 
-    Devuelve el estimador e intervalo de confianza por Monte Carlo
-  """
-  from scipy.stats import norm
-
-  # Número de simulaciones cargadas
-  size = len(sims)
-  # Estimador MC
-  estim = sims.mean()
-  # Estimador MC del IC
-  error = math.sqrt(sims.var())*math.sqrt(size-1)/size
-  cuantil = norm.ppf(1-0.05/2)
-  ic_low = estim - cuantil*error
-  ic_up = estim + cuantil*error
-  # Resultado
-  return([round(estim,4), round(ic_low,4), round(ic_up,4)])
+### Funciones para procesos de Poisson
+######################################
 
 def generate_poisson_events(rate, time_duration):
   """
@@ -237,6 +228,8 @@ def poisson_simulation(rate, time_duration, show_visualization=True):
         else:
             return num_events_list, event_times_list, inter_arrival_times_list
 
+## Función para obtener la matriz de tasas y la matriz generadora de una CMTC
+#############################################################################
 def matriz_tasas_generadora(tiempos, prob):
   """
   Función para obtener la matriz de tasas (R) y la matriz generadora (Q) a
@@ -263,6 +256,16 @@ def matriz_tasas_generadora(tiempos, prob):
   # Matriz generadora
   Q = np.round(R - np.diag(tasas_permanencia),2)
   return R,Q
+
+## Clase para el análisis de CMTC
+#############################################################################
+# Métodos contenidos
+#  * matriz_prob_salto: Obtiene la matriz de probabildiad de salto dividiendo cada elemento de cada fila de tasas por la suma de la fila.
+#  * matriz_prob_trans: Calcula la matriz de probabilidades de transición en el instante ts.
+#  * tiempos_ocupacion: Calcula los tiempos de ocupación hasta el instante Ts.
+#  * distr_lim_general:  Calcula la distribución límite
+#  * tiempos_primer_paso: Calcula los tiempos de primer paso al conjunto de estados A.
+#  *  
 
 class CMTC:
     def __init__(self, Rmat): # Add estados as an argument
@@ -368,6 +371,11 @@ class CMTC:
                 resultados[f"estado {estado}"] = ps[i]
         return resultados
 
+#==========================================================
+# Simuladores de sistemas de colas con simpy
+#==========================================================
+
+########### M/M/s
 
 def system_MMs(tasa_arrival, tasa_service, tiempo, servers):
     """
@@ -527,8 +535,6 @@ def system_MMs(tasa_arrival, tasa_service, tiempo, servers):
     return df     
 
 
-
-
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import seaborn as sns
@@ -654,8 +660,6 @@ def plot_historial_MMs(historial):
 
   plt.show()
 
-
-
 def get_stats_MMs(historial, servidores, tiempo):
     """
     Función para obtener medidas de eficiencia del sistema
@@ -760,6 +764,8 @@ def MC_MMs(tasa_arrival, tasa_service, tiempo, servers, nsims):
         analisis_MC.loc[metrica, ['Media', 'IC0.025', 'IC0.975']] = MC_estim(eficiencia[metrica])
 
     return analisis_MC
+
+########### M/M/inf
 
 def system_MMinf(tasa_arrival, tasa_service, tiempo):
     """
@@ -1002,6 +1008,7 @@ def MC_MMinf(tasa_arrival, tasa_service, tiempo, nsims):
   analisis_MC.index = nombres
   return analisis_MC
 
+########### M/M/s/K
 
 def system_MMsK(tasa_arrival, tasa_service, tiempo, servers, K):
     """
