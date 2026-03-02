@@ -837,3 +837,47 @@ def obtener_distribucion_ganadora(resultados):
     except Exception as e:
         print(f"❌ Error al intentar instanciar la distribución: {e}")
         return None
+
+### Funciones para cadenas de markov de tiempo discreto
+########################################################
+
+# Función para matriz de transición de n pasos para el proceso mc
+def cmtd_matrix_n(mc, n):
+  """
+  Función para obtener la matriz de transición de n pasos dada un amtriz de transición y el número de saltos que deseamos.
+
+  Parámetros de entrada:
+    - mc: matriz de transición de un paso.
+    - n: número de saltos.
+
+  Parámetros de salida:
+    - p_n: matriz de transición de n pasos.
+  """
+  import numpy as np
+  import pydtmc
+  from pydtmc import MarkovChain
+  
+  mtn  = MarkovChain(np.linalg.matrix_power(mc.p, n), mc.states)
+  return mtn
+
+# Función para obtener la matriz de ocupación de n pasos para el proceso mc
+def mat_ocupacion_proceso(mc, n):
+  """
+  Función para obtener la matriz de ocupación asocida al proceso mc en n transiciones
+
+  Parámetros de entrada:
+  - mc: proceso
+  - n: número de transiciones
+
+  Parámetros de salida:
+  - mocupa: matriz de ocupacion
+  """
+  import numpy as np
+  import pydtmc
+  from pydtmc import MarkovChain
+  
+  mocupa = np.zeros((len(mc.states), len(mc.states)))
+  for i in range(n+1):
+    mocupa += np.linalg.matrix_power(mc.p, i)
+
+  return mocupa
