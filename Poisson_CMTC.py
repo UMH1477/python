@@ -377,6 +377,9 @@ def caracterizar_pp(df):
     - lista con dos componentes donde la primera es la media de la exponencial y la segunda es
       la tasa del proceso de Poisson obtenida como 1/media.
   """
+  import scipy.stats as stats
+  import numpy as np
+  
   # lista donde almacenar los resultados
   resultado = list()
 
