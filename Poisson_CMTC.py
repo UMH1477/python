@@ -392,10 +392,10 @@ def caracterizar_pp(df):
   resultado.append(tasa)
   
   ########### Impresión de resultados
-  print("\n")
-  print("Parámetros estimados:")
-  print("======================")
-  print(f"Media exponencial: {media:.4f}")
-  print(f"Tasa Poisson: {tasa:.4f}")
+  #print("\n")
+  #print("Parámetros estimados:")
+  #print("======================")
+  #print(f"Media exponencial: {media:.4f}")
+  #print(f"Tasa Poisson: {tasa:.4f}")
   
   return resultado
