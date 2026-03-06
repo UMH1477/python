@@ -377,24 +377,13 @@ def caracterizar_pp(df):
     - lista con dos componentes donde la primera es la media de la exponencial y la segunda es
       la tasa del proceso de Poisson obtenida como 1/media.
   """
-  import scipy.stats as stats
-  import numpy as np
-  
+ 
   # lista donde almacenar los resultados
   resultado = list()
 
   # Correción de localización
   correccion = (df - df.min()).fillna(0)
 
-  # gráfico ajuste  
-  fig = plt.figure(figsize=(8, 5))
-  # Histograma normal
-  plt.hist(correccion, bins='auto', density=True, alpha=0.6, color='steelblue')
-  x = np.linspace(0, correccion.max(),num=1000)
-  plt.plot(x, stats.expon.pdf(x, scale=0.455809), 'r-', lw=2)
-  plt.title('Histograma vs Curva Teórica')
-  plt.show()
-    
   ########## Parámetros estimados
   #### media exponencial
   media = correccion.mean()
