@@ -360,3 +360,41 @@ class CMTC:
             if i not in A:
                 resultados[f"estado {estado}"] = ps[i]
         return resultados
+
+#### Función para estiamción parámetros Proceso Poisson a partir del vector de tiempos entre llegadas
+
+def caracterizar_pp(df):
+  """
+  Función para caracterizar el proceso de poisson. Para un vector df con los tiempos entre llegadas, 
+  obtenemos la estimación de la media de la exponencial de dichos tiempos, y la tasa del processo 
+  de Poisson correspondiente. Corrregimos los datos para asegurar que el parámetro de localización 
+  de la exponencial es cero.
+
+  Parámetros entrada:
+    - df: data frame con los tiempos entre llegadas.
+  
+  Parámetros de salida:
+    - lista con dos componentes donde la primera es la media de la exponencial y la segunda es
+      la tasa del proceso de Poisson obtenida como 1/media.
+  """
+  # lista donde almacenar los resultados
+  resultado = list()
+
+  # Correción de localización
+  correccion = (df - df.min()).fillna(0)
+  
+  ########## Parámetros estimados
+  #### media exponencial
+  media = correccion.mean()
+  resultado.append(media)
+  #### tasa Poisson
+  tasa = 1/media
+  resultado.append(tasa)
+  
+  ########### Impresión de resultados
+  print("Parámetros estimados:")
+  print("======================")
+  print(f"Media exponencial: {media:.4f}")
+  print(f"Tasa Poisson: {tasa:.4f}")
+  
+  return resultado
