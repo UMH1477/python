@@ -382,7 +382,16 @@ def caracterizar_pp(df):
 
   # Correción de localización
   correccion = (df - df.min()).fillna(0)
-  
+
+  # gráfico ajuste  
+  fig = plt.figure(figsize=(8, 5))
+  # Histograma normal
+  plt.hist(correccion, bins='auto', density=True, alpha=0.6, color='steelblue')
+  x = np.linspace(0, correccion.max(),num=1000)
+  plt.plot(x, stats.expon.pdf(x, scale=0.455809), 'r-', lw=2)
+  plt.title('Histograma vs Curva Teórica')
+  plt.show()
+    
   ########## Parámetros estimados
   #### media exponencial
   media = correccion.mean()
