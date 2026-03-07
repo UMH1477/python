@@ -768,7 +768,7 @@ def best_fit_continuous(data, alpha=0.05, verbose=True):
 # DE best_fit_discrete o best_fit_continuous
 # ==============================================================================
 
-def obtener_distribucion_ganadora(resultados):
+def obtener_distribucion_ganadora(resultados, verbose=True):
     """
     Toma el output de best_fit_continuous() o best_fit_discrete() y genera
     un objeto de distribución 'congelado' de scipy.stats.
@@ -827,11 +827,11 @@ def obtener_distribucion_ganadora(resultados):
 
         # El operador ** desempaqueta el diccionario como argumentos con nombre
         dist_stats = dist_class(**parametros)
-
-        print("."*100)
-        print(f"✅ Variable aleatoria '{nombre_dist}' instanciada correctamente.")
-        print(f"con parámetros {parametros}")
-        print("."*100)
+        if verbose:
+          print("."*100)
+          print(f"✅ Variable aleatoria '{nombre_dist}' instanciada correctamente.")
+          print(f"con parámetros {parametros}")
+          print("."*100)
       
         return dist_stats
 
