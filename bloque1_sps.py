@@ -124,7 +124,7 @@ def MC_estim(sims):
   ic_low = estim - cuantil*error
   ic_up = estim + cuantil*error
   # Resultado
-  print(f"Estimación MC: {round(estim,4)} [{round(ic_low,4)},{round(ic_up,4)}]")
+  #print(f"Estimación MC: {round(estim,4)} [{round(ic_low,4)},{round(ic_up,4)}]")
   return([round(estim,4), round(ic_low,4), round(ic_up,4)])
 
 #============================================================================================
