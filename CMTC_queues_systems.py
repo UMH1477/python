@@ -287,7 +287,7 @@ class CMTC:
         """
         Calcula la matriz de probabilidades de transición en el instante ts.
         """
-        epsilon=1e-03
+        epsilon=1e-05
         Rmat = self.Rmat
         ris = np.sum(Rmat, axis=1)
         rlimit = np.max(ris) if cal == 1 else np.sum(Rmat)
