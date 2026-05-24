@@ -761,31 +761,94 @@ def prueba_rapida_modelo6(tiempo_limite=120, semilla=123):
 # 7. Visualización específica del Modelo 6
 # ------------------------------------------------------------
 
-def tabla_global_modelo6(resultado_mc, nodos=None, mostrar="ic", decimales=3):
-    return tabla_mc_por_nodo(
-        resultado_mc["globales"],
-        nodos=nodos,
-        patron_metrica=None,
-        mostrar=mostrar,
-        decimales=decimales,
-    )
+def tabla_local_franja_modelo6(
+    resultado_mc,
+    franja,
+    metricas_base=None,
+    mostrar="ic",
+    decimales=3,
+):
+    """
+    Tabla local métrica × atracción para una franja concreta del Modelo 6.
+
+    franja : str etiqueta (p.ej. "0-120") o int índice.
+    """
+    etiquetas = etiquetas_franjas(FRANJAS_LLEGADAS_MODELO5)
+    etiqueta  = etiquetas[franja] if isinstance(franja, int) else str(franja)
+
+    if metricas_base is None:
+        metricas_base = [
+            "tasa_efectiva_llegada",
+            "tasa_salida",
+            "utilizacion",
+            "numero_medio_en_atraccion",
+            "numero_medio_en_cola",
+            "tiempo_medio_total_atraccion",
+            "tiempo_medio_espera_cola",
+            "numero_esperado_visitas",
+        ]
+
+    suf    = f"_franja_{etiqueta}"
+    df     = resultado_mc["locales"].copy()
+    mets_f = [m + suf for m in metricas_base]
+    df     = df[df["metrica"].isin(mets_f)].copy()
+    df["metrica"] = df["metrica"].replace({m + suf: m for m in metricas_base})
+
+    return tabla_mc_por_nodo(df, nodos=NOMBRES_NODOS, mostrar=mostrar, decimales=decimales)
 
 
-def tabla_local_modelo6(resultado_mc, patron_metrica=None, mostrar="ic", decimales=3):
-    return tabla_mc_por_nodo(
-        resultado_mc["locales"],
-        nodos=None,
-        patron_metrica=patron_metrica,
-        mostrar=mostrar,
-        decimales=decimales,
-    )
+def tabla_local_perfil_modelo6(
+    resultado_mc,
+    perfil,
+    metricas_base=None,
+    mostrar="ic",
+    decimales=3,
+):
+    """
+    Tabla local métrica × atracción para un perfil concreto del Modelo 6.
+
+    perfil : str etiqueta (p.ej. "Familias") o int índice.
+    """
+    if isinstance(perfil, int):
+        perfil = PERFILES_MODELO6[perfil]
+
+    pid = id_texto(perfil)
+
+    if metricas_base is None:
+        metricas_base = [
+            "tasa_efectiva_llegada",
+            "tasa_salida",
+            "utilizacion",
+            "numero_medio_en_atraccion",
+            "numero_medio_en_cola",
+            "tiempo_medio_total_atraccion",
+            "tiempo_medio_espera_cola",
+            "numero_esperado_visitas",
+        ]
+
+    suf    = f"_{pid}"
+    df     = resultado_mc["locales"].copy()
+    mets_p = [m + suf for m in metricas_base]
+    df     = df[df["metrica"].isin(mets_p)].copy()
+    df["metrica"] = df["metrica"].replace({m + suf: m for m in metricas_base})
+
+    return tabla_mc_por_nodo(df, nodos=NOMBRES_NODOS, mostrar=mostrar, decimales=decimales)
 
 
 def mostrar_resumen_modelo6(resultado_mc, mostrar="ic", decimales=3):
-    print("=" * 70)
-    print("MODELO 6. Métricas locales base")
-    print("=" * 70)
-    metricas_base = [
+    """
+    Muestra todas las tablas MC del Modelo 6:
+
+        1. Métricas locales base (agregadas)
+        2. Métricas locales por franja (una tabla por franja)
+        3. Métricas locales por perfil (una tabla por perfil)
+        4. Métricas globales base
+        5. Métricas globales por perfil
+        6. Métricas globales por franja
+        7. Métricas globales por perfil/franja
+    """
+
+    metricas_base_local = [
         "tasa_efectiva_llegada",
         "tasa_salida",
         "utilizacion",
@@ -795,24 +858,91 @@ def mostrar_resumen_modelo6(resultado_mc, mostrar="ic", decimales=3):
         "tiempo_medio_espera_cola",
         "numero_esperado_visitas",
     ]
-    df_local_base = resultado_mc["locales"][resultado_mc["locales"]["metrica"].isin(metricas_base)]
-    display(tabla_mc_por_nodo(df_local_base, mostrar=mostrar, decimales=decimales))
 
-    print("=" * 70)
+    etiquetas = etiquetas_franjas(FRANJAS_LLEGADAS_MODELO5)
+    sep = "=" * 70
+
+    # ------------------------------------------------------------------
+    # 1. Locales base
+    # ------------------------------------------------------------------
+    print(sep)
+    print("MODELO 6. Métricas locales base")
+    print(sep)
+    df_base = resultado_mc["locales"][
+        resultado_mc["locales"]["metrica"].isin(metricas_base_local)
+    ]
+    display(tabla_mc_por_nodo(df_base, mostrar=mostrar, decimales=decimales))
+
+    # ------------------------------------------------------------------
+    # 2. Locales por franja
+    # ------------------------------------------------------------------
+    for etiqueta in etiquetas:
+        print(sep)
+        print(f"MODELO 6. Métricas locales por atracción — franja {etiqueta}")
+        print(sep)
+        display(tabla_local_franja_modelo6(
+            resultado_mc, franja=etiqueta,
+            metricas_base=metricas_base_local,
+            mostrar=mostrar, decimales=decimales,
+        ))
+
+    # ------------------------------------------------------------------
+    # 3. Locales por perfil
+    # ------------------------------------------------------------------
+    for perfil in PERFILES_MODELO6:
+        print(sep)
+        print(f"MODELO 6. Métricas locales por atracción — perfil {perfil}")
+        print(sep)
+        display(tabla_local_perfil_modelo6(
+            resultado_mc, perfil=perfil,
+            metricas_base=metricas_base_local,
+            mostrar=mostrar, decimales=decimales,
+        ))
+
+    # ------------------------------------------------------------------
+    # 4. Globales base
+    # ------------------------------------------------------------------
+    print(sep)
     print("MODELO 6. Métricas globales base")
-    print("=" * 70)
-    display(tabla_global_modelo6(resultado_mc, nodos=["Global"], mostrar=mostrar, decimales=decimales))
+    print(sep)
+    display(tabla_global_modelo6(
+        resultado_mc, nodos=["Global"],
+        mostrar=mostrar, decimales=decimales,
+    ))
 
-    print("=" * 70)
+    # ------------------------------------------------------------------
+    # 5. Globales por perfil
+    # ------------------------------------------------------------------
+    print(sep)
     print("MODELO 6. Métricas globales por perfil")
-    print("=" * 70)
-    display(tabla_global_modelo6(resultado_mc, nodos=PERFILES_MODELO6, mostrar=mostrar, decimales=decimales))
+    print(sep)
+    display(tabla_global_modelo6(
+        resultado_mc, nodos=PERFILES_MODELO6,
+        mostrar=mostrar, decimales=decimales,
+    ))
 
-    print("=" * 70)
+    # ------------------------------------------------------------------
+    # 6. Globales por franja
+    # ------------------------------------------------------------------
+    print(sep)
     print("MODELO 6. Métricas globales por franja")
-    print("=" * 70)
-    display(tabla_global_modelo6(resultado_mc, nodos=etiquetas_franjas_modelo6(), mostrar=mostrar, decimales=decimales))
+    print(sep)
+    display(tabla_global_modelo6(
+        resultado_mc, nodos=etiquetas,
+        mostrar=mostrar, decimales=decimales,
+    ))
 
+    # ------------------------------------------------------------------
+    # 7. Globales por perfil/franja
+    # ------------------------------------------------------------------
+    nodos_pf = [f"{p}/{fr}" for p in PERFILES_MODELO6 for fr in etiquetas]
+    print(sep)
+    print("MODELO 6. Métricas globales por perfil y franja")
+    print(sep)
+    display(tabla_global_modelo6(
+        resultado_mc, nodos=nodos_pf,
+        mostrar=mostrar, decimales=decimales,
+    ))
 
 def graficar_global_franjas_modelo6(resultado_mc, metricas=None):
     graficar_global_por_grupo(
