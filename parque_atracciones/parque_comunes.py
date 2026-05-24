@@ -8,6 +8,19 @@ import math
 import matplotlib.pyplot as plt
 from scipy.stats import t
 
+EQUIVALENCIAS_METRICAS = {
+    "tasa_efectiva_llegada":        ["lambda_efectiva"],
+    "utilizacion":                  ["rho"],
+    "numero_medio_en_atraccion":    ["L"],
+    "numero_medio_en_cola":         ["Lq"],
+    "tiempo_medio_total_atraccion": ["W"],
+    "tiempo_medio_espera_cola":     ["Wq"],
+    "numero_esperado_visitas":      ["visitas_por_cliente_externo"],
+    "numero_medio_visitantes_parque":       ["L_global"],
+    "numero_medio_visitantes_colas_parque": ["Lq_global"],
+    "tiempo_medio_permanencia_parque":      ["W_global"],
+    "tiempo_medio_espera_colas_parque":     ["Wq_global"],
+}
 
 
 # ============================================================
