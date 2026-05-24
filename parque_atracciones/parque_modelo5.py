@@ -389,6 +389,8 @@ class EstadisticasModelo5(EstadisticasModelo4):
             {"metrica": "W_global", "nodo": "Global", "valor": self._ratio(self.suma_tiempo_parque, self.salidas_parque)},
             {"metrica": "Wq_global", "nodo": "Global", "valor": self._ratio(self.suma_espera_parque, self.salidas_parque)},
             {"metrica": "L_desplazamiento", "nodo": "Global", "valor": self.area_desplazamiento / tiempo_limite},
+            {"metrica": "desplazamientos_por_cliente_externo", "nodo": "Global","valor": self._ratio(self.num_desplazamientos, self.entradas_parque)},
+            {"metrica": "tiempo_desplazamiento_medio", "nodo": "Global","valor": self._ratio(self.suma_tiempo_desplazamiento, self.num_desplazamientos)},
             {"metrica": "tiempo_desplazamiento_medio", "nodo": "Global", "valor": self._ratio(self.suma_tiempo_desplazamiento, self.num_desplazamientos)},
             {"metrica": "desplazamientos_por_cliente_externo", "nodo": "Global", "valor": self._ratio(self.num_desplazamientos, self.entradas_parque)},
             {"metrica": "atracciones_completadas_por_visitante", "nodo": "Global", "valor": self._ratio(self.suma_visitas_completadas_salida, self.salidas_parque)},
