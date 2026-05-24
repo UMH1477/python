@@ -1311,13 +1311,58 @@ def elegir_destino_adaptativo(
 
 
 # ============================================================
-# AMPLIACIÓN DEL BLOQUE COMÚN REUTILIZABLE
+# AMPLIACIÓN DEL BLOQUE COMÚN REUTILIZABLE para el MODELO 6
 # Perfiles, franjas, decisiones por utilidad y visualización MC
 # ============================================================
 
 import math
 import numpy as np
 import pandas as pd
+
+# ============================================================
+# MODELO 6. MODELO 5 + PERFILES + TOLERANCIA A LA ESPERA
+#           + MÉTRICAS POR FRANJA, PERFIL Y PERFIL/FRANJA
+# ============================================================
+
+PERFILES_MODELO6 = [
+    "Familias",
+    "Jóvenes",
+    "Intensivos",
+    "Relajados",
+]
+
+PROB_PERFILES_MODELO6 = np.array([0.35, 0.30, 0.20, 0.15], dtype=float)
+PROB_PERFILES_MODELO6 = PROB_PERFILES_MODELO6 / PROB_PERFILES_MODELO6.sum()
+
+# theta, beta, alpha y objetivo de atracciones completadas.
+THETA_PERFIL_MODELO6 = np.array([0.08, 0.04, 0.10, 0.06], dtype=float)
+BETA_PERFIL_MODELO6 = np.array([1.00, 0.60, 0.40, 1.20], dtype=float)
+ALPHA_PERFIL_MODELO6 = np.array([1.10, 1.30, 1.40, 1.00], dtype=float)
+OBJETIVO_PERFIL_MODELO6 = np.array([4, 6, 7, 3], dtype=int)
+
+# Tolerancia individual a la espera: Triangular(min, moda, max), en minutos.
+TOLERANCIA_TRIANGULAR_MODELO6 = np.array([
+    [6, 12, 20],
+    [10, 20, 35],
+    [8, 15, 25],
+    [5, 10, 18],
+], dtype=float)
+
+# Popularidad A_{k,j}: filas = perfiles, columnas = atracciones.
+POPULARIDAD_PERFIL_MODELO6 = np.array([
+    [0.80, 1.40, 1.10, 1.50, 0.70, 0.90],
+    [1.60, 0.40, 1.20, 0.70, 1.50, 1.30],
+    [1.50, 0.50, 1.00, 0.80, 1.30, 1.20],
+    [0.90, 1.00, 1.10, 1.30, 0.80, 0.90],
+], dtype=float)
+
+# Probabilidad de salida p_k(v,w) = min(p0_k + a_k*v + b_k*w, pmax_k)
+# w se mide en minutos. No se divide entre 60.
+P0_SALIDA_PERFIL_MODELO6 = np.array([0.06, 0.03, 0.02, 0.08], dtype=float)
+A_SALIDA_PERFIL_MODELO6 = np.array([0.05, 0.03, 0.02, 0.06], dtype=float)
+B_SALIDA_PERFIL_MODELO6 = np.array([0.20, 0.08, 0.12, 0.12], dtype=float)
+PMAX_SALIDA_PERFIL_MODELO6 = np.array([0.45, 0.30, 0.25, 0.50], dtype=float)
+
 
 
 # ------------------------------------------------------------
