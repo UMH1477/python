@@ -1059,3 +1059,118 @@ def comparar_modelo6_modelo7(resultado_m6, resultado_m7,
         metricas_locales=metricas_locales,
         metricas_globales=metricas_globales,
     )
+
+
+def comparar_modelo6_modelo7(resultado_m6, resultado_m7):
+    """
+    Compara Modelo 6 y Modelo 7 en las métricas compartidas.
+ 
+    Métricas locales: solo sobre las 6 atracciones comunes.
+    Métricas globales: métricas base compartidas por ambos modelos.
+    """
+ 
+    nombres_atr = NOMBRES_NODOS_M7[:N_ATRACCIONES_M7]
+ 
+    metricas_locales = [
+        "tasa_efectiva_llegada",
+        "tasa_salida",
+        "utilizacion",
+        "numero_medio_en_atraccion",
+        "numero_medio_en_cola",
+        "tiempo_medio_total_atraccion",
+        "tiempo_medio_espera_cola",
+        "numero_esperado_visitas",
+    ]
+ 
+    metricas_globales = [
+        "numero_medio_visitantes_parque",
+        "numero_medio_visitantes_colas_parque",
+        "tiempo_medio_permanencia_parque",
+        "tiempo_medio_espera_colas_parque",
+        "tiempo_medio_movimiento_parque",
+        "atracciones_completadas_por_visitante",
+        "rechazos_por_espera",
+    ]
+ 
+    colores = ["#8DB6CD", "#F4A7A1"]
+    nombre_a = "Modelo 6"
+    nombre_b = "Modelo 7"
+ 
+    # ── Métricas locales (atracciones) ───────────────────────
+    # Filtrar métricas presentes en ambos modelos
+    metricas_loc_disp = [
+        m for m in metricas_locales
+        if m in resultado_m6["locales"]["metrica"].values
+        and m in resultado_m7["locales"]["metrica"].values
+    ]
+ 
+    if metricas_loc_disp:
+        n_cols = min(4, len(metricas_loc_disp))
+        n_rows = int(np.ceil(len(metricas_loc_disp) / n_cols))
+        fig, axes = plt.subplots(n_rows, n_cols,
+                                 figsize=(4.2 * n_cols, 3.2 * n_rows),
+                                 squeeze=False)
+        axes = axes.flatten()
+        x = np.arange(len(nombres_atr))
+        etq = [n.replace(" ", "\n") for n in nombres_atr]
+ 
+        for idx, metrica in enumerate(metricas_loc_disp):
+            ax = axes[idx]
+            for color, nombre, resultado in [
+                (colores[0], nombre_a, resultado_m6),
+                (colores[1], nombre_b, resultado_m7),
+            ]:
+                df = resultado["locales"]
+                vals = (
+                    df[df["metrica"] == metrica]
+                    .set_index("nodo")
+                    .reindex(nombres_atr)["media"]
+                )
+                ax.plot(x, vals, marker="o", linewidth=2,
+                        color=color, label=nombre)
+            ax.set_title(metrica, fontsize=9, fontweight="bold")
+            ax.set_xticks(x)
+            ax.set_xticklabels(etq, fontsize=8)
+            ax.grid(True, alpha=0.25)
+            ax.legend(fontsize=8)
+ 
+        for j in range(len(metricas_loc_disp), len(axes)):
+            axes[j].axis("off")
+ 
+        fig.suptitle("Comparación local: Modelo 6 vs Modelo 7 (Atracciones)",
+                     fontsize=13, fontweight="bold")
+        plt.tight_layout()
+        plt.show()
+ 
+    # ── Métricas globales ────────────────────────────────────
+    metricas_glob_disp = [
+        m for m in metricas_globales
+        if m in resultado_m6["globales"]["metrica"].values
+        and m in resultado_m7["globales"]["metrica"].values
+    ]
+ 
+    if metricas_glob_disp:
+        fig, ax = plt.subplots(figsize=(max(10, len(metricas_glob_disp) * 1.6), 4.5))
+        x = np.arange(len(metricas_glob_disp))
+ 
+        for i, (color, nombre, resultado) in enumerate([
+            (colores[0], nombre_a, resultado_m6),
+            (colores[1], nombre_b, resultado_m7),
+        ]):
+            df = resultado["globales"]
+            vals = (
+                df[(df["metrica"].isin(metricas_glob_disp)) & (df["nodo"] == "Global")]
+                .set_index("metrica")
+                .reindex(metricas_glob_disp)["media"]
+            )
+            ax.bar(x + (i - 0.5) * 0.35, vals, width=0.35,
+                   color=color, label=nombre)
+ 
+        ax.set_xticks(x)
+        ax.set_xticklabels(metricas_glob_disp, rotation=30, ha="right", fontsize=9)
+        ax.set_title("Comparación global: Modelo 6 vs Modelo 7",
+                     fontsize=13, fontweight="bold")
+        ax.legend()
+        ax.grid(axis="y", alpha=0.25)
+        plt.tight_layout()
+        plt.show()
