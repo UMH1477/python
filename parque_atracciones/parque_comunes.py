@@ -8,19 +8,6 @@ import math
 import matplotlib.pyplot as plt
 from scipy.stats import t
 
-EQUIVALENCIAS_METRICAS = {
-    "tasa_efectiva_llegada":        ["lambda_efectiva"],
-    "utilizacion":                  ["rho"],
-    "numero_medio_en_atraccion":    ["L"],
-    "numero_medio_en_cola":         ["Lq"],
-    "tiempo_medio_total_atraccion": ["W"],
-    "tiempo_medio_espera_cola":     ["Wq"],
-    "numero_esperado_visitas":      ["visitas_por_cliente_externo"],
-    "numero_medio_visitantes_parque":       ["L_global"],
-    "numero_medio_visitantes_colas_parque": ["Lq_global"],
-    "tiempo_medio_permanencia_parque":      ["W_global"],
-    "tiempo_medio_espera_colas_parque":     ["Wq_global"],
-}
 
 
 # ============================================================
@@ -2047,6 +2034,20 @@ def graficar_global_tamanos_tiempos(
 # ------------------------------------------------------------
 # C. Comparación genérica entre dos modelos
 # ------------------------------------------------------------
+EQUIVALENCIAS_METRICAS = {
+    "tasa_efectiva_llegada":        ["lambda_efectiva"],
+    "utilizacion":                  ["rho"],
+    "numero_medio_en_atraccion":    ["L"],
+    "numero_medio_en_cola":         ["Lq"],
+    "tiempo_medio_total_atraccion": ["W"],
+    "tiempo_medio_espera_cola":     ["Wq"],
+    "numero_esperado_visitas":      ["visitas_por_cliente_externo"],
+    "numero_medio_visitantes_parque":       ["L_global"],
+    "numero_medio_visitantes_colas_parque": ["Lq_global"],
+    "tiempo_medio_permanencia_parque":      ["W_global"],
+    "tiempo_medio_espera_colas_parque":     ["Wq_global"],
+}
+
 def diagnosticar_metricas_comunes(
     resultado_a,
     nombre_a,
@@ -2083,8 +2084,20 @@ def diagnosticar_metricas_comunes(
         "nodos_comunes", "nodos_solo_a", "nodos_solo_b"
     """
     def preparar(df):
-        if normalizar:
-            df = _normalizar_df(df)
+        if not normalizar:
+            return df
+        df = df.copy()
+        alias_a_canonico = {
+            alias: canonico
+            for canonico, aliases in EQUIVALENCIAS_METRICAS.items()
+            for alias in aliases
+        }
+        def norm(nombre):
+            if "_franja_" in nombre:
+                base, suf = nombre.split("_franja_", 1)
+                return f"{alias_a_canonico.get(base, base)}_franja_{suf}"
+            return alias_a_canonico.get(nombre, nombre)
+        df["metrica"] = df["metrica"].apply(norm)
         return df
 
     def filtrar_metricas(df):
