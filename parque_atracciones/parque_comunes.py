@@ -8,16 +8,6 @@ import math
 import matplotlib.pyplot as plt
 from scipy.stats import t
 
-try:
-    import simpy
-except ImportError:
-    !pip install simpy
-    import simpy
-
-try:
-    from IPython.display import display
-except ImportError:
-    display = print
 
 
 # ============================================================
