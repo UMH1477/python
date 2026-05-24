@@ -8,6 +8,17 @@ url = "https://raw.githubusercontent.com/UMH1477/python/refs/heads/main/parque_a
 urlretrieve(url, 'parque_comunes.py')
 from parque_comunes import *  
 
+import importlib
+from urllib.request import urlretrieve
+
+for i in range(1,7):
+  model_name = f'parque_modelo{i}'
+  url = f"https://raw.githubusercontent.com/UMH1477/python/refs/heads/main/parque_atracciones/{model_name}.py"
+  urlretrieve(url, f'{model_name}.py')
+  # Dynamically import all contents of the module into the current namespace
+  # This is equivalent to 'from module_name import *'
+  exec(f"from {model_name} import *", globals())
+    
 import simpy
 import numpy as np
 import pandas as pd
