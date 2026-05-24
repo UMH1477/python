@@ -968,13 +968,65 @@ def graficar_global_modelo6_tamanos_y_tiempos(resultado_mc):
         titulo_base="Modelo 6. Métricas globales por franja",
     )
 
-def comparar_modelo5_modelo6(resultado_m5, resultado_m6,
-                              metricas_locales=None, metricas_globales=None):
-    comparar_dos_modelos(
-        resultado_m5, "Modelo 5",
-        resultado_m6, "Modelo 6",
-        metricas_locales=metricas_locales,
-        metricas_globales=metricas_globales,
-    )
- 
+#=====================================================================
+# ALMACENAR COMO PARQUET LAS SIMULACIONES DE MODELO 6 Y 7 
 
+import os
+import pandas as pd
+
+
+def guardar_resultado_mc(resultado_mc, carpeta, nombre_modelo):
+    """
+    Guarda los DataFrames locales y globales de un resultado MC
+    en formato Parquet dentro de la carpeta indicada.
+
+    Crea dos ficheros:
+        <carpeta>/<nombre_modelo>_locales.parquet
+        <carpeta>/<nombre_modelo>_globales.parquet
+
+    Parámetros
+    ----------
+    resultado_mc : dict
+        Resultado de agregar_replicas(), con claves "locales" y "globales".
+    carpeta : str
+        Ruta de la carpeta destino (se crea si no existe).
+    nombre_modelo : str
+        Prefijo del nombre de fichero, p.ej. "modelo6".
+    """
+    os.makedirs(carpeta, exist_ok=True)
+
+    path_loc = os.path.join(carpeta, f"{nombre_modelo}_locales.parquet")
+    path_glo = os.path.join(carpeta, f"{nombre_modelo}_globales.parquet")
+
+    resultado_mc["locales"].to_parquet(path_loc, index=False)
+    resultado_mc["globales"].to_parquet(path_glo, index=False)
+
+    print(f"Guardado: {path_loc}")
+    print(f"Guardado: {path_glo}")
+
+
+def cargar_resultado_mc(carpeta, nombre_modelo):
+    """
+    Carga los DataFrames locales y globales guardados por
+    guardar_resultado_mc() y devuelve un dict con la misma
+    estructura que agregar_replicas().
+
+    Parámetros
+    ----------
+    carpeta : str
+    nombre_modelo : str
+
+    Devuelve
+    --------
+    dict con claves "locales" y "globales".
+    """
+    path_loc = os.path.join(carpeta, f"{nombre_modelo}_locales.parquet")
+    path_glo = os.path.join(carpeta, f"{nombre_modelo}_globales.parquet")
+
+    locales  = pd.read_parquet(path_loc)
+    globales = pd.read_parquet(path_glo)
+
+    print(f"Cargado: {path_loc}  ({len(locales)} filas)")
+    print(f"Cargado: {path_glo}  ({len(globales)} filas)")
+
+    return {"locales": locales, "globales": globales}
