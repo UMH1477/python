@@ -3,22 +3,7 @@
 #           + ELECCIÓN ADAPTATIVA DE DESTINO
 #           + MÉTRICAS LOCALES Y GLOBALES POR FRANJA HORARIA
 # ============================================================
-from urllib.request import urlretrieve
-url = "https://raw.githubusercontent.com/UMH1477/python/refs/heads/main/parque_atracciones/parque_comunes.py"
-urlretrieve(url, 'parque_comunes.py')
-from parque_comunes import *  
 
-import importlib
-from urllib.request import urlretrieve
-
-for i in range(1,5):
-  model_name = f'parque_modelo{i}'
-  url = f"https://raw.githubusercontent.com/UMH1477/python/refs/heads/main/parque_atracciones/{model_name}.py"
-  urlretrieve(url, f'{model_name}.py')
-  # Dynamically import all contents of the module into the current namespace
-  # This is equivalent to 'from module_name import *'
-  exec(f"from {model_name} import *", globals())
-    
 import simpy
 import numpy as np
 import pandas as pd
@@ -135,6 +120,23 @@ class EstadisticasModelo5(EstadisticasModelo4):
         self.suma_espera_estimada_eleccion_franja = np.zeros(self.f)
         self.num_decisiones_continuar_franja = np.zeros(self.f, dtype=int)
 
+        # ----------------------------------------------------
+        # CORRECCIÓN: arrays de desplazamiento y probabilidades
+        # de salida por franja (no existían en la versión anterior).
+        # ----------------------------------------------------
+
+        # Desplazamientos por franja.
+        self.num_desplazamientos_franja = np.zeros(self.f, dtype=int)
+        self.suma_tiempo_desplazamiento_franja = np.zeros(self.f)
+
+        # Probabilidades de salida por número de visitas y franja.
+        self.oportunidades_salida_por_v_franja = np.zeros(
+            (self.f, self.max_visitas_tabla), dtype=int
+        )
+        self.salidas_por_v_franja = np.zeros(
+            (self.f, self.max_visitas_tabla), dtype=int
+        )
+
     @staticmethod
     def _ratio(num, den):
         return num / den if den > 0 else np.nan
@@ -196,7 +198,8 @@ class EstadisticasModelo5(EstadisticasModelo4):
             self.suma_W_franja[r, i] += tiempo_total
 
     def registrar_lote(self, i, n_visitantes, capacidad_lote,
-                       tiempo_embarque=None, tiempo_desembarque=None, tiempo_ciclo=None):
+                       tiempo_embarque=None, tiempo_desembarque=None,
+                       tiempo_ciclo=None):
         """
         Compatible con Modelo 3/4/5.
 
@@ -255,12 +258,37 @@ class EstadisticasModelo5(EstadisticasModelo4):
         return v - 1
 
     def registrar_oportunidad_salida(self, visitas_completadas):
+        """
+        CORRECCIÓN: sobreescribe el método del padre para acumular
+        también por franja.
+        """
+        r = self._franja_actual()
         k = self.indice_visitas_tabla(visitas_completadas)
         self.oportunidades_salida_por_v[k] += 1
+        if r is not None:
+            self.oportunidades_salida_por_v_franja[r, k] += 1
 
     def registrar_salida_por_visitas(self, visitas_completadas):
+        """
+        CORRECCIÓN: sobreescribe el método del padre para acumular
+        también por franja.
+        """
+        r = self._franja_actual()
         k = self.indice_visitas_tabla(visitas_completadas)
         self.salidas_por_v[k] += 1
+        if r is not None:
+            self.salidas_por_v_franja[r, k] += 1
+
+    def terminar_desplazamiento(self, tiempo_desplazamiento):
+        """
+        CORRECCIÓN: sobreescribe el método del padre para acumular
+        también por franja.
+        """
+        r = self._franja_actual()
+        super().terminar_desplazamiento(tiempo_desplazamiento)
+        if r is not None:
+            self.num_desplazamientos_franja[r] += 1
+            self.suma_tiempo_desplazamiento_franja[r] += tiempo_desplazamiento
 
     def registrar_eleccion_destino(self, destino, espera_estimada_destino):
         r = self._franja_actual()
@@ -389,8 +417,6 @@ class EstadisticasModelo5(EstadisticasModelo4):
             {"metrica": "W_global", "nodo": "Global", "valor": self._ratio(self.suma_tiempo_parque, self.salidas_parque)},
             {"metrica": "Wq_global", "nodo": "Global", "valor": self._ratio(self.suma_espera_parque, self.salidas_parque)},
             {"metrica": "L_desplazamiento", "nodo": "Global", "valor": self.area_desplazamiento / tiempo_limite},
-            {"metrica": "desplazamientos_por_cliente_externo", "nodo": "Global","valor": self._ratio(self.num_desplazamientos, self.entradas_parque)},
-            {"metrica": "tiempo_desplazamiento_medio", "nodo": "Global","valor": self._ratio(self.suma_tiempo_desplazamiento, self.num_desplazamientos)},
             {"metrica": "tiempo_desplazamiento_medio", "nodo": "Global", "valor": self._ratio(self.suma_tiempo_desplazamiento, self.num_desplazamientos)},
             {"metrica": "desplazamientos_por_cliente_externo", "nodo": "Global", "valor": self._ratio(self.num_desplazamientos, self.entradas_parque)},
             {"metrica": "atracciones_completadas_por_visitante", "nodo": "Global", "valor": self._ratio(self.suma_visitas_completadas_salida, self.salidas_parque)},
@@ -425,11 +451,30 @@ class EstadisticasModelo5(EstadisticasModelo4):
                 {"metrica": "W_global", "nodo": suf_nodo, "valor": self._ratio(self.suma_tiempo_parque_franja[r], den)},
                 {"metrica": "Wq_global", "nodo": suf_nodo, "valor": self._ratio(self.suma_espera_parque_franja[r], den)},
                 {"metrica": "L_desplazamiento", "nodo": suf_nodo, "valor": self.area_desplazamiento_franja[r] / dur if dur > 0 else np.nan},
+                # CORRECCIÓN: añadidas las dos métricas de desplazamiento por franja
+                {"metrica": "tiempo_desplazamiento_medio", "nodo": suf_nodo, "valor": self._ratio(self.suma_tiempo_desplazamiento_franja[r], self.num_desplazamientos_franja[r])},
+                {"metrica": "desplazamientos_por_cliente_externo", "nodo": suf_nodo, "valor": self._ratio(self.num_desplazamientos_franja[r], self.entradas_parque_franja[r])},
                 {"metrica": "atracciones_completadas_por_visitante", "nodo": suf_nodo, "valor": self._ratio(self.suma_visitas_completadas_salida_franja[r], den)},
                 {"metrica": "tiempo_medio_movimiento_por_visitante", "nodo": suf_nodo, "valor": self._ratio(self.suma_tiempo_movimiento_salida_franja[r], den)},
                 {"metrica": "espera_estimada_media_al_elegir_destino", "nodo": suf_nodo, "valor": self._ratio(self.suma_espera_estimada_eleccion_franja[r], self.num_decisiones_continuar_franja[r])},
                 {"metrica": "destinos_elegidos_por_cliente_externo", "nodo": suf_nodo, "valor": self._ratio(self.num_decisiones_continuar_franja[r], self.entradas_parque_franja[r])},
             ])
+
+            # CORRECCIÓN: probabilidades de salida empíricas por franja
+            for k in range(self.max_visitas_tabla):
+                if k < self.max_visitas_tabla - 1:
+                    etiq_p = f"p_salida_empirica_tras_{k + 1}_visitas"
+                else:
+                    etiq_p = f"p_salida_empirica_tras_{self.max_visitas_tabla}_o_mas_visitas"
+
+                filas_globales.append({
+                    "metrica": etiq_p,
+                    "nodo": suf_nodo,
+                    "valor": self._ratio(
+                        self.salidas_por_v_franja[r, k],
+                        self.oportunidades_salida_por_v_franja[r, k]
+                    )
+                })
 
         return pd.DataFrame(filas_locales), pd.DataFrame(filas_globales)
 
@@ -889,6 +934,8 @@ def graficar_global_franjas_modelo5(
             "W_global",
             "Wq_global",
             "L_desplazamiento",
+            "tiempo_desplazamiento_medio",
+            "desplazamientos_por_cliente_externo",
             "atracciones_completadas_por_visitante",
             "tiempo_medio_movimiento_por_visitante",
             "espera_estimada_media_al_elegir_destino",
@@ -959,4 +1006,3 @@ def graficar_local_franjas_modelo5(
         titulo=titulo,
         n_cols=3
     )
-
