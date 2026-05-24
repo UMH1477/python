@@ -2034,6 +2034,137 @@ def graficar_global_tamanos_tiempos(
 # ------------------------------------------------------------
 # C. Comparación genérica entre dos modelos
 # ------------------------------------------------------------
+def diagnosticar_metricas_comunes(
+    resultado_a,
+    nombre_a,
+    resultado_b,
+    nombre_b,
+    normalizar=True,
+    incluir_franjas=True,
+    incluir_perfiles=False,
+):
+    """
+    Imprime un diagnóstico detallado de las métricas y nodos
+    comunes entre dos modelos, y las exclusivas de cada uno.
+
+    Útil para decidir qué se puede comparar antes de llamar
+    a comparar_dos_modelos() o comparar_modelos().
+
+    Parámetros
+    ----------
+    resultado_a, resultado_b : dict
+        Resultados MC con claves "locales" y "globales".
+    nombre_a, nombre_b : str
+    normalizar : bool
+        Si True aplica EQUIVALENCIAS_METRICAS antes de comparar.
+    incluir_franjas : bool
+        Si True incluye métricas con sufijo _franja_ en el análisis.
+    incluir_perfiles : bool
+        Si False (por defecto) excluye métricas con sufijo de perfil.
+
+    Devuelve
+    --------
+    dict con claves:
+        "locales_comunes", "locales_solo_a", "locales_solo_b",
+        "globales_comunes", "globales_solo_a", "globales_solo_b",
+        "nodos_comunes", "nodos_solo_a", "nodos_solo_b"
+    """
+    def preparar(df):
+        if normalizar:
+            df = _normalizar_df(df)
+        return df
+
+    def filtrar_metricas(df):
+        metricas = set(df["metrica"].unique())
+        if not incluir_franjas:
+            metricas = {m for m in metricas if "_franja_" not in m}
+        if not incluir_perfiles:
+            metricas = {
+                m for m in metricas
+                if not any(
+                    id_texto(p) in m
+                    for p in ["Familias", "Jóvenes", "Intensivos", "Relajados"]
+                )
+            }
+        return metricas
+
+    loc_a = preparar(resultado_a["locales"])
+    loc_b = preparar(resultado_b["locales"])
+    glo_a = preparar(resultado_a["globales"])
+    glo_b = preparar(resultado_b["globales"])
+
+    met_loc_a = filtrar_metricas(loc_a)
+    met_loc_b = filtrar_metricas(loc_b)
+    met_glo_a = filtrar_metricas(glo_a)
+    met_glo_b = filtrar_metricas(glo_b)
+
+    nodos_a = set(loc_a["nodo"].unique())
+    nodos_b = set(loc_b["nodo"].unique())
+
+    loc_comunes  = sorted(met_loc_a & met_loc_b)
+    loc_solo_a   = sorted(met_loc_a - met_loc_b)
+    loc_solo_b   = sorted(met_loc_b - met_loc_a)
+    glo_comunes  = sorted(met_glo_a & met_glo_b)
+    glo_solo_a   = sorted(met_glo_a - met_glo_b)
+    glo_solo_b   = sorted(met_glo_b - met_glo_a)
+    nodos_comunes = sorted(nodos_a & nodos_b)
+    nodos_solo_a  = sorted(nodos_a - nodos_b)
+    nodos_solo_b  = sorted(nodos_b - nodos_a)
+
+    sep = "─" * 60
+
+    print(sep)
+    print(f"DIAGNÓSTICO: {nombre_a}  vs  {nombre_b}")
+    print(f"  normalización aplicada : {normalizar}")
+    print(f"  incluir franjas        : {incluir_franjas}")
+    print(f"  incluir perfiles       : {incluir_perfiles}")
+    print(sep)
+
+    print(f"\n{'NODOS (locales)'}")
+    print(f"  Comunes ({len(nodos_comunes)}): {nodos_comunes}")
+    print(f"  Solo en {nombre_a} ({len(nodos_solo_a)}): {nodos_solo_a}")
+    print(f"  Solo en {nombre_b} ({len(nodos_solo_b)}): {nodos_solo_b}")
+
+    print(f"\n{'MÉTRICAS LOCALES'}")
+    print(f"  Comunes ({len(loc_comunes)}):")
+    for m in loc_comunes:
+        print(f"    ✓ {m}")
+    if loc_solo_a:
+        print(f"  Solo en {nombre_a} ({len(loc_solo_a)}):")
+        for m in loc_solo_a:
+            print(f"    · {m}")
+    if loc_solo_b:
+        print(f"  Solo en {nombre_b} ({len(loc_solo_b)}):")
+        for m in loc_solo_b:
+            print(f"    · {m}")
+
+    print(f"\n{'MÉTRICAS GLOBALES'}")
+    print(f"  Comunes ({len(glo_comunes)}):")
+    for m in glo_comunes:
+        print(f"    ✓ {m}")
+    if glo_solo_a:
+        print(f"  Solo en {nombre_a} ({len(glo_solo_a)}):")
+        for m in glo_solo_a:
+            print(f"    · {m}")
+    if glo_solo_b:
+        print(f"  Solo en {nombre_b} ({len(glo_solo_b)}):")
+        for m in glo_solo_b:
+            print(f"    · {m}")
+
+    print(sep)
+
+    return {
+        "locales_comunes":  loc_comunes,
+        "locales_solo_a":   loc_solo_a,
+        "locales_solo_b":   loc_solo_b,
+        "globales_comunes": glo_comunes,
+        "globales_solo_a":  glo_solo_a,
+        "globales_solo_b":  glo_solo_b,
+        "nodos_comunes":    nodos_comunes,
+        "nodos_solo_a":     nodos_solo_a,
+        "nodos_solo_b":     nodos_solo_b,
+    }
+
 
 def comparar_dos_modelos(
     resultado_a,
