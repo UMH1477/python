@@ -3,6 +3,10 @@
 #           Restauración (M/M/c), Descanso (capacidad finita),
 #           Espectáculo (funciones programadas)
 # ============================================================
+from urllib.request import urlretrieve
+url = "https://raw.githubusercontent.com/UMH1477/python/refs/heads/main/parque_atracciones/parque_comunes.py"
+urlretrieve(url, 'parque_comunes.py')
+from parque_comunes import *  
 
 import simpy
 import numpy as np
