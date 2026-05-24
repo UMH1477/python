@@ -1,3 +1,10 @@
+import requests, importlib, sys
+
+url = "https://raw.githubusercontent.com/UMH1477/python/refs/heads/main/parque_atracciones/parque_comunes.py"
+with open("funciones_comunes.py", "w") as f:
+    f.write(requests.get(url).text)
+import funciones_comunes        
+
 # ============================================================
 # MODELO 1. RED DE JACKSON M/M/s
 # Versión adaptada a parámetros y funciones genéricas
