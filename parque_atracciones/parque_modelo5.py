@@ -18,7 +18,22 @@ import pandas as pd
 #      - tabla_mc_por_nodo
 #      - graficar_metricas_en_grid_pastel
 
+from urllib.request import urlretrieve
+url = "https://raw.githubusercontent.com/UMH1477/python/refs/heads/main/parque_atracciones/parque_comunes.py"
+urlretrieve(url, 'parque_comunes.py')
+from parque_comunes import *  
 
+import importlib
+from urllib.request import urlretrieve
+
+for i in range(1,5):
+  model_name = f'parque_modelo{i}'
+  url = f"https://raw.githubusercontent.com/UMH1477/python/refs/heads/main/parque_atracciones/{model_name}.py"
+  urlretrieve(url, f'{model_name}.py')
+  # Dynamically import all contents of the module into the current namespace
+  # This is equivalent to 'from module_name import *'
+  exec(f"from {model_name} import *", globals())
+    
 # ------------------------------------------------------------
 # 1. Estadísticas del Modelo 5 con métricas por franja
 # ------------------------------------------------------------
