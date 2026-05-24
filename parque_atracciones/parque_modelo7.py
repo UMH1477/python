@@ -877,7 +877,114 @@ def prueba_rapida_modelo7(tiempo_limite=120, semilla=123):
 # 5. VISUALIZACIÓN ESPECÍFICA DEL MODELO 7
 # ============================================================
 
+# ============================================================
+# VISUALIZACIÓN ESPECÍFICA DEL MODELO 7 — versión completa
+# Sustituye la sección de visualización en parque_modelo7.py
+# ============================================================
+
+
+# ------------------------------------------------------------
+# Helpers de tabla locales por franja y por perfil
+# ------------------------------------------------------------
+
+def tabla_local_franja_modelo7(
+    resultado_mc,
+    franja,
+    metricas_base=None,
+    nodos=None,
+    mostrar="ic",
+    decimales=3,
+):
+    """
+    Tabla local métrica × nodo para una franja concreta del Modelo 7.
+    franja : str etiqueta (p.ej. "0-120") o int índice.
+    nodos  : lista de nodos a mostrar; si None, todos los 9 nodos.
+    """
+    etiquetas = etiquetas_franjas(FRANJAS_LLEGADAS_MODELO5)
+    etiqueta  = etiquetas[franja] if isinstance(franja, int) else str(franja)
+
+    if metricas_base is None:
+        metricas_base = [
+            "tasa_efectiva_llegada",
+            "tasa_salida",
+            "utilizacion",
+            "numero_medio_en_atraccion",
+            "numero_medio_en_cola",
+            "tiempo_medio_total_atraccion",
+            "tiempo_medio_espera_cola",
+        ]
+    if nodos is None:
+        nodos = NOMBRES_NODOS_M7
+
+    suf    = f"_franja_{etiqueta}"
+    df     = resultado_mc["locales"].copy()
+    mets_f = [m + suf for m in metricas_base]
+    df     = df[df["metrica"].isin(mets_f)].copy()
+    df["metrica"] = df["metrica"].replace({m + suf: m for m in metricas_base})
+
+    return tabla_mc_por_nodo(df, nodos=nodos, mostrar=mostrar, decimales=decimales)
+
+
+def tabla_local_perfil_modelo7(
+    resultado_mc,
+    perfil,
+    metricas_base=None,
+    nodos=None,
+    mostrar="ic",
+    decimales=3,
+):
+    """
+    Tabla local métrica × nodo para un perfil concreto del Modelo 7.
+    perfil : str etiqueta (p.ej. "Familias") o int índice.
+    """
+    if isinstance(perfil, int):
+        perfil = PERFILES_MODELO6[perfil]
+    pid = id_texto(perfil)
+
+    if metricas_base is None:
+        metricas_base = [
+            "tasa_efectiva_llegada",
+            "tasa_salida",
+            "utilizacion",
+            "numero_medio_en_atraccion",
+            "numero_medio_en_cola",
+            "tiempo_medio_total_atraccion",
+            "tiempo_medio_espera_cola",
+            "numero_esperado_visitas",
+        ]
+    if nodos is None:
+        nodos = NOMBRES_NODOS_M7
+
+    suf    = f"_{pid}"
+    df     = resultado_mc["locales"].copy()
+    mets_p = [m + suf for m in metricas_base]
+    df     = df[df["metrica"].isin(mets_p)].copy()
+    df["metrica"] = df["metrica"].replace({m + suf: m for m in metricas_base})
+
+    return tabla_mc_por_nodo(df, nodos=nodos, mostrar=mostrar, decimales=decimales)
+
+
+# ------------------------------------------------------------
+# Resumen tabular completo
+# ------------------------------------------------------------
+
 def mostrar_resumen_modelo7(resultado_mc, mostrar="ic", decimales=3):
+    """
+    Muestra todas las tablas MC del Modelo 7:
+
+        1.  Locales base — Atracciones
+        2.  Locales base — Actividades no mecánicas
+        3.  Locales por franja (una tabla por franja, todos los nodos)
+        4.  Locales por perfil (una tabla por perfil, todos los nodos)
+        5.  Espectáculo: ocupación por función (global)
+        6.  Espectáculo: ocupación por función y perfil
+        7.  Globales base
+        8.  Globales por perfil
+        9.  Globales por franja
+        10. Globales por perfil/franja
+    """
+    sep = "=" * 70
+
     metricas_base = [
         "tasa_efectiva_llegada",
         "tasa_salida",
@@ -888,41 +995,69 @@ def mostrar_resumen_modelo7(resultado_mc, mostrar="ic", decimales=3):
         "tiempo_medio_espera_cola",
         "numero_esperado_visitas",
     ]
-
-    print("=" * 70)
-    print("MODELO 7. Métricas locales base — Atracciones")
-    print("=" * 70)
-    df_atr = resultado_mc["locales"][
-        resultado_mc["locales"]["metrica"].isin(metricas_base) &
-        resultado_mc["locales"]["nodo"].isin(NOMBRES_NODOS_M7[:N_ATRACCIONES_M7])
-    ]
-    display(tabla_mc_por_nodo(df_atr, mostrar=mostrar, decimales=decimales))
-
-    print("=" * 70)
-    print("MODELO 7. Métricas locales base — Actividades no mecánicas")
-    print("=" * 70)
+    etiquetas  = etiquetas_franjas(FRANJAS_LLEGADAS_MODELO5)
+    nodos_atr  = NOMBRES_NODOS_M7[:N_ATRACCIONES_M7]
     nodos_comp = [NOMBRES_NODOS_M7[IDX_RESTAURACION],
                   NOMBRES_NODOS_M7[IDX_DESCANSO],
                   NOMBRES_NODOS_M7[IDX_ESPECTACULO]]
+
+    # 1. Locales base — Atracciones
+    print(sep)
+    print("MODELO 7. Métricas locales base — Atracciones")
+    print(sep)
+    df_atr = resultado_mc["locales"][
+        resultado_mc["locales"]["metrica"].isin(metricas_base) &
+        resultado_mc["locales"]["nodo"].isin(nodos_atr)
+    ]
+    display(tabla_mc_por_nodo(df_atr, mostrar=mostrar, decimales=decimales))
+
+    # 2. Locales base — Actividades no mecánicas
+    print(sep)
+    print("MODELO 7. Métricas locales base — Actividades no mecánicas")
+    print(sep)
     df_comp = resultado_mc["locales"][
         resultado_mc["locales"]["metrica"].isin(metricas_base) &
         resultado_mc["locales"]["nodo"].isin(nodos_comp)
     ]
     display(tabla_mc_por_nodo(df_comp, mostrar=mostrar, decimales=decimales))
 
-    print("=" * 70)
+    # 3. Locales por franja
+    for etiqueta in etiquetas:
+        print(sep)
+        print(f"MODELO 7. Métricas locales por nodo — franja {etiqueta}")
+        print(sep)
+        display(tabla_local_franja_modelo7(
+            resultado_mc, franja=etiqueta,
+            metricas_base=metricas_base,
+            mostrar=mostrar, decimales=decimales,
+        ))
+
+    # 4. Locales por perfil
+    for perfil in PERFILES_MODELO6:
+        print(sep)
+        print(f"MODELO 7. Métricas locales por nodo — perfil {perfil}")
+        print(sep)
+        display(tabla_local_perfil_modelo7(
+            resultado_mc, perfil=perfil,
+            metricas_base=metricas_base,
+            mostrar=mostrar, decimales=decimales,
+        ))
+
+    # 5. Espectáculo: ocupación por función
+    print(sep)
     print("MODELO 7. Ocupación del Espectáculo por función")
-    print("=" * 70)
+    print(sep)
     df_esp = resultado_mc["locales"][
         resultado_mc["locales"]["metrica"] == "ocupacion_espectaculo"
     ]
     display(tabla_mc_por_nodo(df_esp, mostrar=mostrar, decimales=decimales))
 
-    print("=" * 70)
+    # 6. Espectáculo: ocupación por función y perfil
+    print(sep)
     print("MODELO 7. Ocupación del Espectáculo por función y perfil")
-    print("=" * 70)
-    for k, perfil in enumerate(PERFILES_MODELO6):
-        pid = id_texto(perfil)
+    print(sep)
+    for perfil in PERFILES_MODELO6:
+        pid   = id_texto(perfil)
         df_ep = resultado_mc["locales"][
             resultado_mc["locales"]["metrica"] == f"ocupacion_espectaculo_{pid}"
         ]
@@ -930,85 +1065,131 @@ def mostrar_resumen_modelo7(resultado_mc, mostrar="ic", decimales=3):
             print(f"  Perfil: {perfil}")
             display(tabla_mc_por_nodo(df_ep, mostrar=mostrar, decimales=decimales))
 
-    print("=" * 70)
+    # 7. Globales base
+    print(sep)
     print("MODELO 7. Métricas globales")
-    print("=" * 70)
+    print(sep)
     display(tabla_mc_por_nodo(
         resultado_mc["globales"],
         nodos=["Global"],
-        mostrar=mostrar, decimales=decimales
+        mostrar=mostrar, decimales=decimales,
     ))
 
-    print("=" * 70)
+    # 8. Globales por perfil
+    print(sep)
     print("MODELO 7. Métricas globales por perfil")
-    print("=" * 70)
+    print(sep)
     display(tabla_mc_por_nodo(
         resultado_mc["globales"],
         nodos=PERFILES_MODELO6,
-        mostrar=mostrar, decimales=decimales
+        mostrar=mostrar, decimales=decimales,
     ))
 
-    print("=" * 70)
+    # 9. Globales por franja
+    print(sep)
     print("MODELO 7. Métricas globales por franja")
-    print("=" * 70)
+    print(sep)
     display(tabla_mc_por_nodo(
         resultado_mc["globales"],
-        nodos=etiquetas_franjas(FRANJAS_LLEGADAS_MODELO5),
-        mostrar=mostrar, decimales=decimales
+        nodos=etiquetas,
+        mostrar=mostrar, decimales=decimales,
     ))
 
+    # 10. Globales por perfil/franja
+    nodos_pf = [f"{p}/{fr}" for p in PERFILES_MODELO6 for fr in etiquetas]
+    print(sep)
+    print("MODELO 7. Métricas globales por perfil y franja")
+    print(sep)
+    display(tabla_mc_por_nodo(
+        resultado_mc["globales"],
+        nodos=nodos_pf,
+        mostrar=mostrar, decimales=decimales,
+    ))
+
+
+# ------------------------------------------------------------
+# Gráficos — actividades no mecánicas (corregido)
+# ------------------------------------------------------------
 
 def graficar_modelo7_actividades(resultado_mc):
     """
-    Gráfico comparativo de métricas locales base para los 3 nodos
-    de actividades no mecánicas, separando tamaños y tiempos.
+    Gráficos comparativos de métricas locales base para los 3 nodos
+    de actividades no mecánicas. Un gráfico de barras agrupadas por nodo,
+    separando tamaños/tasas y tiempos.
     """
-    metricas_tamano = [
-        "numero_medio_en_atraccion",
-        "numero_medio_en_cola",
-        "tasa_efectiva_llegada",
+    import matplotlib.pyplot as plt
+
+    nodos_comp   = [NOMBRES_NODOS_M7[IDX_RESTAURACION],
+                    NOMBRES_NODOS_M7[IDX_DESCANSO],
+                    NOMBRES_NODOS_M7[IDX_ESPECTACULO]]
+    colores_nodo = ["#8DB6CD", "#F4A7A1", "#B8D8BA"]
+
+    grupos = [
+        ("Tamaños y tasas", [
+            "tasa_efectiva_llegada",
+            "numero_medio_en_atraccion",
+            "numero_medio_en_cola",
+        ]),
+        ("Tiempos", [
+            "tiempo_medio_total_atraccion",
+            "tiempo_medio_espera_cola",
+        ]),
     ]
-    metricas_tiempo = [
-        "tiempo_medio_total_atraccion",
-        "tiempo_medio_espera_cola",
-    ]
 
-    nodos_comp = [NOMBRES_NODOS_M7[IDX_RESTAURACION],
-                  NOMBRES_NODOS_M7[IDX_DESCANSO],
-                  NOMBRES_NODOS_M7[IDX_ESPECTACULO]]
+    for subtitulo, metricas in grupos:
+        n_m = len(metricas)
+        fig, axes = plt.subplots(1, n_m, figsize=(4.5 * n_m, 4), squeeze=False)
+        axes = axes.flatten()
 
-    for titulo, metricas in [
-        ("Actividades no mecánicas — Tamaños", metricas_tamano),
-        ("Actividades no mecánicas — Tiempos", metricas_tiempo),
-    ]:
-        df = resultado_mc["locales"].copy()
-        df = df[df["metrica"].isin(metricas) & df["nodo"].isin(nodos_comp)]
-        df["x"]     = df["nodo"]
-        df["grupo"] = df["metrica"]
-        graficar_metricas_en_grid_pastel(df, metricas, titulo=f"Modelo 7. {titulo}")
+        for idx, metrica in enumerate(metricas):
+            ax = axes[idx]
+            df_m = resultado_mc["locales"][
+                resultado_mc["locales"]["metrica"] == metrica
+            ].set_index("nodo").reindex(nodos_comp)
 
+            x      = np.arange(len(nodos_comp))
+            medias = df_m["media"].fillna(0).values
+            ax.bar(x, medias, color=colores_nodo, width=0.5)
+            ax.set_xticks(x)
+            ax.set_xticklabels([n.replace(" ", "\n") for n in nodos_comp], fontsize=9)
+            ax.set_title(metrica, fontsize=9, fontweight="bold")
+            ax.grid(axis="y", alpha=0.3)
+
+        fig.suptitle(
+            f"Modelo 7. Actividades no mecánicas — {subtitulo}",
+            fontsize=12, fontweight="bold"
+        )
+        plt.tight_layout()
+        plt.show()
+
+
+# ------------------------------------------------------------
+# Gráficos — espectáculo por función
+# ------------------------------------------------------------
 
 def graficar_espectaculo_por_funcion(resultado_mc):
     """
     Barras con ocupación media de cada función del espectáculo,
-    desagregadas por perfil.
+    global y desagregada por perfil.
     """
     import matplotlib.pyplot as plt
 
-    etiq_f = [f"Funcion_{i+1}_t{h}"
-              for i, h in enumerate(HORARIOS_ESPECTACULO_M7)]
+    etiq_f        = [f"Funcion_{i+1}_t{h}"
+                     for i, h in enumerate(HORARIOS_ESPECTACULO_M7)]
+    etiq_eje      = [f"F{i+1}\nt={h}" for i, h in enumerate(HORARIOS_ESPECTACULO_M7)]
+    colores_perfil = ["#8DB6CD", "#F4A7A1", "#B8D8BA", "#D7BDE2"]
+    x             = np.arange(len(etiq_f))
 
     fig, axes = plt.subplots(1, 2, figsize=(13, 4))
 
-    # ── Global ──────────────────────────────────────────────
-    ax = axes[0]
-    df_g = resultado_mc["locales"][
-        resultado_mc["locales"]["metrica"] == "ocupacion_espectaculo"
-    ].set_index("nodo").reindex(etiq_f)
-    x = np.arange(len(etiq_f))
+    # Global
+    ax    = axes[0]
+    df_g  = (resultado_mc["locales"][
+                resultado_mc["locales"]["metrica"] == "ocupacion_espectaculo"]
+             .set_index("nodo").reindex(etiq_f))
     ax.bar(x, df_g["media"].fillna(0), color="#8DB6CD", width=0.5)
     ax.set_xticks(x)
-    ax.set_xticklabels([f"F{i+1}\nt={h}" for i, h in enumerate(HORARIOS_ESPECTACULO_M7)], fontsize=9)
+    ax.set_xticklabels(etiq_eje, fontsize=9)
     ax.set_title("Ocupación media por función (Global)", fontweight="bold")
     ax.set_ylabel("Visitantes")
     ax.set_ylim(0, CAPACIDAD_ESPECTACULO_M7 * 1.15)
@@ -1017,21 +1198,20 @@ def graficar_espectaculo_por_funcion(resultado_mc):
     ax.legend(fontsize=8)
     ax.grid(axis="y", alpha=0.3)
 
-    # ── Por perfil ───────────────────────────────────────────
-    ax = axes[1]
-    colores_perfil = ["#8DB6CD", "#F4A7A1", "#B8D8BA", "#D7BDE2"]
-    n_perfiles = len(PERFILES_MODELO6)
+    # Por perfil
+    ax    = axes[1]
     ancho = 0.18
+    n_p   = len(PERFILES_MODELO6)
     for k, perfil in enumerate(PERFILES_MODELO6):
-        pid = id_texto(perfil)
-        df_p = resultado_mc["locales"][
-            resultado_mc["locales"]["metrica"] == f"ocupacion_espectaculo_{pid}"
-        ].set_index("nodo").reindex(etiq_f)
-        offset = (k - n_perfiles / 2 + 0.5) * ancho
+        pid   = id_texto(perfil)
+        df_p  = (resultado_mc["locales"][
+                    resultado_mc["locales"]["metrica"] == f"ocupacion_espectaculo_{pid}"]
+                 .set_index("nodo").reindex(etiq_f))
+        offset = (k - n_p / 2 + 0.5) * ancho
         ax.bar(x + offset, df_p["media"].fillna(0),
                width=ancho, color=colores_perfil[k], label=perfil)
     ax.set_xticks(x)
-    ax.set_xticklabels([f"F{i+1}\nt={h}" for i, h in enumerate(HORARIOS_ESPECTACULO_M7)], fontsize=9)
+    ax.set_xticklabels(etiq_eje, fontsize=9)
     ax.set_title("Ocupación media por función y perfil", fontweight="bold")
     ax.set_ylabel("Visitantes")
     ax.legend(fontsize=8)
@@ -1040,6 +1220,28 @@ def graficar_espectaculo_por_funcion(resultado_mc):
     fig.suptitle("Modelo 7. Espectáculo", fontsize=13, fontweight="bold")
     plt.tight_layout()
     plt.show()
+
+
+# ------------------------------------------------------------
+# Gráficos globales — envoltorios
+# ------------------------------------------------------------
+
+def graficar_global_franjas_modelo7(resultado_mc, metricas=None):
+    graficar_global_por_grupo(
+        resultado_mc,
+        nodos=etiquetas_franjas(FRANJAS_LLEGADAS_MODELO5),
+        metricas=metricas,
+        titulo="Modelo 7. Métricas globales por franja",
+    )
+
+
+def graficar_global_perfiles_modelo7(resultado_mc, metricas=None):
+    graficar_global_por_grupo(
+        resultado_mc,
+        nodos=PERFILES_MODELO6,
+        metricas=metricas,
+        titulo="Modelo 7. Métricas globales por perfil",
+    )
 
 
 def graficar_global_perfil_franja_modelo7(resultado_mc, metricas=None):
@@ -1051,126 +1253,62 @@ def graficar_global_perfil_franja_modelo7(resultado_mc, metricas=None):
         titulo="Modelo 7. Métricas globales por perfil y franja",
     )
 
-def comparar_modelo6_modelo7(resultado_m6, resultado_m7,
-                              metricas_locales=None, metricas_globales=None):
-    comparar_dos_modelos(
-        resultado_m6, "Modelo 6",
-        resultado_m7, "Modelo 7",
-        metricas_locales=metricas_locales,
-        metricas_globales=metricas_globales,
+
+def graficar_global_modelo7_tamanos_y_tiempos(resultado_mc):
+    graficar_global_tamanos_tiempos(
+        resultado_mc,
+        nodos=etiquetas_franjas(FRANJAS_LLEGADAS_MODELO5),
+        titulo_base="Modelo 7. Métricas globales por franja",
     )
 
 
-def comparar_modelo6_modelo7(resultado_m6, resultado_m7):
+# ------------------------------------------------------------
+# Gráfico local por franjas (líneas por franja, eje X = nodos)
+# ------------------------------------------------------------
+
+def graficar_local_franjas_modelo7(
+    resultado_mc,
+    metricas_base=None,
+    nodos=None,
+    titulo="Modelo 7. Métricas locales por franja horaria",
+):
     """
-    Compara Modelo 6 y Modelo 7 en las métricas compartidas.
- 
-    Métricas locales: solo sobre las 6 atracciones comunes.
-    Métricas globales: métricas base compartidas por ambos modelos.
+    Para cada métrica base, representa los nodos en el eje X
+    y una línea por franja horaria.
+    nodos : lista de nodos a representar; si None, los 9 nodos M7.
     """
- 
-    nombres_atr = NOMBRES_NODOS_M7[:N_ATRACCIONES_M7]
- 
-    metricas_locales = [
-        "tasa_efectiva_llegada",
-        "tasa_salida",
-        "utilizacion",
-        "numero_medio_en_atraccion",
-        "numero_medio_en_cola",
-        "tiempo_medio_total_atraccion",
-        "tiempo_medio_espera_cola",
-        "numero_esperado_visitas",
-    ]
- 
-    metricas_globales = [
-        "numero_medio_visitantes_parque",
-        "numero_medio_visitantes_colas_parque",
-        "tiempo_medio_permanencia_parque",
-        "tiempo_medio_espera_colas_parque",
-        "tiempo_medio_movimiento_parque",
-        "atracciones_completadas_por_visitante",
-        "rechazos_por_espera",
-    ]
- 
-    colores = ["#8DB6CD", "#F4A7A1"]
-    nombre_a = "Modelo 6"
-    nombre_b = "Modelo 7"
- 
-    # ── Métricas locales (atracciones) ───────────────────────
-    # Filtrar métricas presentes en ambos modelos
-    metricas_loc_disp = [
-        m for m in metricas_locales
-        if m in resultado_m6["locales"]["metrica"].values
-        and m in resultado_m7["locales"]["metrica"].values
-    ]
- 
-    if metricas_loc_disp:
-        n_cols = min(4, len(metricas_loc_disp))
-        n_rows = int(np.ceil(len(metricas_loc_disp) / n_cols))
-        fig, axes = plt.subplots(n_rows, n_cols,
-                                 figsize=(4.2 * n_cols, 3.2 * n_rows),
-                                 squeeze=False)
-        axes = axes.flatten()
-        x = np.arange(len(nombres_atr))
-        etq = [n.replace(" ", "\n") for n in nombres_atr]
- 
-        for idx, metrica in enumerate(metricas_loc_disp):
-            ax = axes[idx]
-            for color, nombre, resultado in [
-                (colores[0], nombre_a, resultado_m6),
-                (colores[1], nombre_b, resultado_m7),
-            ]:
-                df = resultado["locales"]
-                vals = (
-                    df[df["metrica"] == metrica]
-                    .set_index("nodo")
-                    .reindex(nombres_atr)["media"]
-                )
-                ax.plot(x, vals, marker="o", linewidth=2,
-                        color=color, label=nombre)
-            ax.set_title(metrica, fontsize=9, fontweight="bold")
-            ax.set_xticks(x)
-            ax.set_xticklabels(etq, fontsize=8)
-            ax.grid(True, alpha=0.25)
-            ax.legend(fontsize=8)
- 
-        for j in range(len(metricas_loc_disp), len(axes)):
-            axes[j].axis("off")
- 
-        fig.suptitle("Comparación local: Modelo 6 vs Modelo 7 (Atracciones)",
-                     fontsize=13, fontweight="bold")
-        plt.tight_layout()
-        plt.show()
- 
-    # ── Métricas globales ────────────────────────────────────
-    metricas_glob_disp = [
-        m for m in metricas_globales
-        if m in resultado_m6["globales"]["metrica"].values
-        and m in resultado_m7["globales"]["metrica"].values
-    ]
- 
-    if metricas_glob_disp:
-        fig, ax = plt.subplots(figsize=(max(10, len(metricas_glob_disp) * 1.6), 4.5))
-        x = np.arange(len(metricas_glob_disp))
- 
-        for i, (color, nombre, resultado) in enumerate([
-            (colores[0], nombre_a, resultado_m6),
-            (colores[1], nombre_b, resultado_m7),
-        ]):
-            df = resultado["globales"]
-            vals = (
-                df[(df["metrica"].isin(metricas_glob_disp)) & (df["nodo"] == "Global")]
-                .set_index("metrica")
-                .reindex(metricas_glob_disp)["media"]
-            )
-            ax.bar(x + (i - 0.5) * 0.35, vals, width=0.35,
-                   color=color, label=nombre)
- 
-        ax.set_xticks(x)
-        ax.set_xticklabels(metricas_glob_disp, rotation=30, ha="right", fontsize=9)
-        ax.set_title("Comparación global: Modelo 6 vs Modelo 7",
-                     fontsize=13, fontweight="bold")
-        ax.legend()
-        ax.grid(axis="y", alpha=0.25)
-        plt.tight_layout()
-        plt.show()
+    etiquetas = etiquetas_franjas(FRANJAS_LLEGADAS_MODELO5)
+
+    if metricas_base is None:
+        metricas_base = [
+            "tasa_efectiva_llegada",
+            "tasa_salida",
+            "utilizacion",
+            "numero_medio_en_atraccion",
+            "numero_medio_en_cola",
+            "tiempo_medio_total_atraccion",
+            "tiempo_medio_espera_cola",
+        ]
+    if nodos is None:
+        nodos = NOMBRES_NODOS_M7
+
+    df    = resultado_mc["locales"].copy()
+    filas = []
+
+    for metrica_base in metricas_base:
+        for etiqueta in etiquetas:
+            nombre_metrica = f"{metrica_base}_franja_{etiqueta}"
+            aux = df[df["metrica"] == nombre_metrica].copy()
+            if aux.empty:
+                continue
+            aux["metrica"] = metrica_base
+            aux["x"]       = pd.Categorical(aux["nodo"], categories=nodos, ordered=True)
+            aux["grupo"]   = etiqueta
+            filas.append(aux)
+
+    if not filas:
+        print("No hay métricas locales por franja para representar.")
+        return
+
+    df_plot = pd.concat(filas, ignore_index=True)
+    graficar_metricas_en_grid_pastel(df_plot, metricas_base, titulo=titulo, n_cols=3)
