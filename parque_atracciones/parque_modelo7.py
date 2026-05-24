@@ -1050,3 +1050,12 @@ def graficar_global_perfil_franja_modelo7(resultado_mc, metricas=None):
         metricas=metricas,
         titulo="Modelo 7. Métricas globales por perfil y franja",
     )
+
+def comparar_modelo6_modelo7(resultado_m6, resultado_m7,
+                              metricas_locales=None, metricas_globales=None):
+    comparar_dos_modelos(
+        resultado_m6, "Modelo 6",
+        resultado_m7, "Modelo 7",
+        metricas_locales=metricas_locales,
+        metricas_globales=metricas_globales,
+    )
