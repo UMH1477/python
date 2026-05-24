@@ -2035,161 +2035,39 @@ def graficar_global_tamanos_tiempos(
 # C. Comparación genérica entre dos modelos
 # ------------------------------------------------------------
 EQUIVALENCIAS_METRICAS = {
-    "tasa_efectiva_llegada":        ["lambda_efectiva"],
-    "utilizacion":                  ["rho"],
-    "numero_medio_en_atraccion":    ["L"],
-    "numero_medio_en_cola":         ["Lq"],
-    "tiempo_medio_total_atraccion": ["W"],
-    "tiempo_medio_espera_cola":     ["Wq"],
-    "numero_esperado_visitas":      ["visitas_por_cliente_externo"],
-    "numero_medio_visitantes_parque":       ["L_global"],
+    "tasa_efectiva_llegada":              ["lambda_efectiva"],
+    "utilizacion":                        ["rho"],
+    "numero_medio_en_atraccion":          ["L"],
+    "numero_medio_en_cola":               ["Lq"],
+    "tiempo_medio_total_atraccion":       ["W"],
+    "tiempo_medio_espera_cola":           ["Wq"],
+    "numero_esperado_visitas":            ["visitas_por_cliente_externo"],
+    "numero_medio_visitantes_parque":     ["L_global"],
     "numero_medio_visitantes_colas_parque": ["Lq_global"],
-    "tiempo_medio_permanencia_parque":      ["W_global"],
-    "tiempo_medio_espera_colas_parque":     ["Wq_global"],
+    "tiempo_medio_permanencia_parque":    ["W_global"],
+    "tiempo_medio_espera_colas_parque":   ["Wq_global"],
 }
 
-def diagnosticar_metricas_comunes(
-    resultado_a,
-    nombre_a,
-    resultado_b,
-    nombre_b,
-    normalizar=True,
-    incluir_franjas=True,
-    incluir_perfiles=False,
-):
-    """
-    Imprime un diagnóstico detallado de las métricas y nodos
-    comunes entre dos modelos, y las exclusivas de cada uno.
+_ALIAS_A_CANONICO = {
+    alias: canonico
+    for canonico, aliases in EQUIVALENCIAS_METRICAS.items()
+    for alias in aliases
+}
 
-    Útil para decidir qué se puede comparar antes de llamar
-    a comparar_dos_modelos() o comparar_modelos().
 
-    Parámetros
-    ----------
-    resultado_a, resultado_b : dict
-        Resultados MC con claves "locales" y "globales".
-    nombre_a, nombre_b : str
-    normalizar : bool
-        Si True aplica EQUIVALENCIAS_METRICAS antes de comparar.
-    incluir_franjas : bool
-        Si True incluye métricas con sufijo _franja_ en el análisis.
-    incluir_perfiles : bool
-        Si False (por defecto) excluye métricas con sufijo de perfil.
+def _normalizar_nombre(nombre):
+    """Traduce un nombre de métrica a su nombre canónico,
+    preservando sufijos _franja_* o _perfil_* si los tiene."""
+    if "_franja_" in nombre:
+        base, suf = nombre.split("_franja_", 1)
+        return f"{_ALIAS_A_CANONICO.get(base, base)}_franja_{suf}"
+    return _ALIAS_A_CANONICO.get(nombre, nombre)
 
-    Devuelve
-    --------
-    dict con claves:
-        "locales_comunes", "locales_solo_a", "locales_solo_b",
-        "globales_comunes", "globales_solo_a", "globales_solo_b",
-        "nodos_comunes", "nodos_solo_a", "nodos_solo_b"
-    """
-    def preparar(df):
-        if not normalizar:
-            return df
-        df = df.copy()
-        alias_a_canonico = {
-            alias: canonico
-            for canonico, aliases in EQUIVALENCIAS_METRICAS.items()
-            for alias in aliases
-        }
-        def norm(nombre):
-            if "_franja_" in nombre:
-                base, suf = nombre.split("_franja_", 1)
-                return f"{alias_a_canonico.get(base, base)}_franja_{suf}"
-            return alias_a_canonico.get(nombre, nombre)
-        df["metrica"] = df["metrica"].apply(norm)
-        return df
 
-    def filtrar_metricas(df):
-        metricas = set(df["metrica"].unique())
-        if not incluir_franjas:
-            metricas = {m for m in metricas if "_franja_" not in m}
-        if not incluir_perfiles:
-            metricas = {
-                m for m in metricas
-                if not any(
-                    id_texto(p) in m
-                    for p in ["Familias", "Jóvenes", "Intensivos", "Relajados"]
-                )
-            }
-        return metricas
-
-    loc_a = preparar(resultado_a["locales"])
-    loc_b = preparar(resultado_b["locales"])
-    glo_a = preparar(resultado_a["globales"])
-    glo_b = preparar(resultado_b["globales"])
-
-    met_loc_a = filtrar_metricas(loc_a)
-    met_loc_b = filtrar_metricas(loc_b)
-    met_glo_a = filtrar_metricas(glo_a)
-    met_glo_b = filtrar_metricas(glo_b)
-
-    nodos_a = set(loc_a["nodo"].unique())
-    nodos_b = set(loc_b["nodo"].unique())
-
-    loc_comunes  = sorted(met_loc_a & met_loc_b)
-    loc_solo_a   = sorted(met_loc_a - met_loc_b)
-    loc_solo_b   = sorted(met_loc_b - met_loc_a)
-    glo_comunes  = sorted(met_glo_a & met_glo_b)
-    glo_solo_a   = sorted(met_glo_a - met_glo_b)
-    glo_solo_b   = sorted(met_glo_b - met_glo_a)
-    nodos_comunes = sorted(nodos_a & nodos_b)
-    nodos_solo_a  = sorted(nodos_a - nodos_b)
-    nodos_solo_b  = sorted(nodos_b - nodos_a)
-
-    sep = "─" * 60
-
-    print(sep)
-    print(f"DIAGNÓSTICO: {nombre_a}  vs  {nombre_b}")
-    print(f"  normalización aplicada : {normalizar}")
-    print(f"  incluir franjas        : {incluir_franjas}")
-    print(f"  incluir perfiles       : {incluir_perfiles}")
-    print(sep)
-
-    print(f"\n{'NODOS (locales)'}")
-    print(f"  Comunes ({len(nodos_comunes)}): {nodos_comunes}")
-    print(f"  Solo en {nombre_a} ({len(nodos_solo_a)}): {nodos_solo_a}")
-    print(f"  Solo en {nombre_b} ({len(nodos_solo_b)}): {nodos_solo_b}")
-
-    print(f"\n{'MÉTRICAS LOCALES'}")
-    print(f"  Comunes ({len(loc_comunes)}):")
-    for m in loc_comunes:
-        print(f"    ✓ {m}")
-    if loc_solo_a:
-        print(f"  Solo en {nombre_a} ({len(loc_solo_a)}):")
-        for m in loc_solo_a:
-            print(f"    · {m}")
-    if loc_solo_b:
-        print(f"  Solo en {nombre_b} ({len(loc_solo_b)}):")
-        for m in loc_solo_b:
-            print(f"    · {m}")
-
-    print(f"\n{'MÉTRICAS GLOBALES'}")
-    print(f"  Comunes ({len(glo_comunes)}):")
-    for m in glo_comunes:
-        print(f"    ✓ {m}")
-    if glo_solo_a:
-        print(f"  Solo en {nombre_a} ({len(glo_solo_a)}):")
-        for m in glo_solo_a:
-            print(f"    · {m}")
-    if glo_solo_b:
-        print(f"  Solo en {nombre_b} ({len(glo_solo_b)}):")
-        for m in glo_solo_b:
-            print(f"    · {m}")
-
-    print(sep)
-
-    return {
-        "locales_comunes":  loc_comunes,
-        "locales_solo_a":   loc_solo_a,
-        "locales_solo_b":   loc_solo_b,
-        "globales_comunes": glo_comunes,
-        "globales_solo_a":  glo_solo_a,
-        "globales_solo_b":  glo_solo_b,
-        "nodos_comunes":    nodos_comunes,
-        "nodos_solo_a":     nodos_solo_a,
-        "nodos_solo_b":     nodos_solo_b,
-    }
+def _normalizar_df(df):
+    df = df.copy()
+    df["metrica"] = df["metrica"].apply(_normalizar_nombre)
+    return df
 
 
 def comparar_dos_modelos(
@@ -2201,107 +2079,98 @@ def comparar_dos_modelos(
     metricas_locales=None,
     metricas_globales=None,
     nodo_global="Global",
+    incluir_franjas=True,
     n_cols=4,
 ):
     """
-    Compara dos modelos sobre métricas y nodos comunes.
-
-    Detección automática (Opción A):
-    - Nodos locales comunes: intersección de los nodos presentes
-      en ambos df["locales"] para las métricas seleccionadas.
-    - Métricas locales comunes: intersección de nombres de métrica
-      en ambos df["locales"].
-    - Métricas globales comunes: intersección en df["globales"]
-      para nodo_global.
-
-    Los parámetros nodos_locales, metricas_locales y
-    metricas_globales permiten sobreescribir la detección
-    automática cuando se desee.
+    Compara dos modelos sobre métricas y nodos comunes,
+    con normalización automática de nombres entre modelos
+    (p.ej. lambda_efectiva ↔ tasa_efectiva_llegada).
 
     Parámetros
     ----------
-    resultado_a, resultado_b : dict
-        Resultados MC de los dos modelos.
-    nombre_a, nombre_b : str
-        Etiquetas para leyenda.
-    nodos_locales : list of str, opcional
-        Si None, se calcula la intersección automáticamente.
-    metricas_locales : list of str, opcional
-        Si None, se calcula la intersección automáticamente.
-    metricas_globales : list of str, opcional
-        Si None, se calcula la intersección automáticamente.
-    nodo_global : str
-        Etiqueta del nodo global (por defecto "Global").
-    n_cols : int
-        Columnas en la cuadrícula de gráficos locales.
+    resultado_a, resultado_b : dict   — resultados MC
+    nombre_a, nombre_b : str          — etiquetas para leyenda
+    nodos_locales : list, opcional    — si None, intersección automática
+    metricas_locales : list, opcional — si None, intersección automática
+    metricas_globales : list, opcional— si None, intersección automática
+    nodo_global : str                 — etiqueta del nodo global
+    incluir_franjas : bool            — si True grafica también por franja
+    n_cols : int                      — columnas en la cuadrícula
     """
     import matplotlib.pyplot as plt
 
-    loc_a = resultado_a["locales"]
-    loc_b = resultado_b["locales"]
-    glo_a = resultado_a["globales"]
-    glo_b = resultado_b["globales"]
+    # Normalizar nombres a vocabulario canónico en ambos modelos
+    loc_a = _normalizar_df(resultado_a["locales"])
+    loc_b = _normalizar_df(resultado_b["locales"])
+    glo_a = _normalizar_df(resultado_a["globales"])
+    glo_b = _normalizar_df(resultado_b["globales"])
 
     colores = ["#8DB6CD", "#F4A7A1"]
 
+    def es_perfil(m):
+        return any(
+            id_texto(p) in m
+            for p in ["Familias", "Jóvenes", "Intensivos", "Relajados"]
+        )
+
     # ── Métricas locales comunes ─────────────────────────────
     if metricas_locales is None:
-        metricas_locales = sorted(
+        todas = sorted(
             set(loc_a["metrica"].unique()) &
             set(loc_b["metrica"].unique())
         )
-    # Filtrar solo métricas "base" (sin sufijos de franja/perfil)
-    # para que la comparación sea legible
-    metricas_locales = [
-        m for m in metricas_locales
-        if "franja" not in m and not any(
-            m.endswith(f"_{id_texto(p)}")
-            for p in ["Familias", "Jóvenes", "Intensivos", "Relajados",
-                      "familias", "jovenes", "intensivos", "relajados"]
-        )
-    ]
+        # Separar base y franja; excluir siempre métricas de perfil
+        metricas_base   = [m for m in todas
+                           if "_franja_" not in m and not es_perfil(m)]
+        metricas_franja = [m for m in todas
+                           if "_franja_" in m and not es_perfil(m)]
+    else:
+        metricas_base   = [m for m in metricas_locales if "_franja_" not in m]
+        metricas_franja = [m for m in metricas_locales if "_franja_" in m]
 
     # ── Nodos locales comunes ────────────────────────────────
     if nodos_locales is None:
-        nodos_a = set(loc_a[loc_a["metrica"].isin(metricas_locales)]["nodo"].unique())
-        nodos_b = set(loc_b[loc_b["metrica"].isin(metricas_locales)]["nodo"].unique())
+        nodos_a = set(loc_a[loc_a["metrica"].isin(metricas_base)]["nodo"].unique())
+        nodos_b = set(loc_b[loc_b["metrica"].isin(metricas_base)]["nodo"].unique())
         nodos_locales = sorted(nodos_a & nodos_b)
 
     # ── Métricas globales comunes ────────────────────────────
     if metricas_globales is None:
-        glo_a_g = glo_a[glo_a["nodo"] == nodo_global]
-        glo_b_g = glo_b[glo_b["nodo"] == nodo_global]
         metricas_globales = sorted(
-            set(glo_a_g["metrica"].unique()) &
-            set(glo_b_g["metrica"].unique())
+            set(glo_a[glo_a["nodo"] == nodo_global]["metrica"].unique()) &
+            set(glo_b[glo_b["nodo"] == nodo_global]["metrica"].unique())
         )
 
-    # ── Gráfico local ────────────────────────────────────────
-    if metricas_locales and nodos_locales:
-        n_m   = len(metricas_locales)
-        n_c   = min(n_cols, n_m)
-        n_r   = math.ceil(n_m / n_c)
+    # ── Helper: dibujar un bloque de métricas locales ────────
+    def graficar_bloque(metricas, titulo_suf=""):
+        if not metricas or not nodos_locales:
+            return
+        n_m = len(metricas)
+        n_c = min(n_cols, n_m)
+        n_r = math.ceil(n_m / n_c)
         fig, axes = plt.subplots(n_r, n_c,
                                  figsize=(4.2 * n_c, 3.2 * n_r),
                                  squeeze=False)
         axes = axes.flatten()
-        x    = np.arange(len(nodos_locales))
-        etq  = [nd.replace(" ", "\n") for nd in nodos_locales]
+        x   = np.arange(len(nodos_locales))
+        etq = [nd.replace(" ", "\n") for nd in nodos_locales]
 
-        for idx, metrica in enumerate(metricas_locales):
+        for idx, metrica in enumerate(metricas):
             ax = axes[idx]
-            for color, nombre, resultado in [
-                (colores[0], nombre_a, resultado_a),
-                (colores[1], nombre_b, resultado_b),
+            for color, nombre, loc in [
+                (colores[0], nombre_a, loc_a),
+                (colores[1], nombre_b, loc_b),
             ]:
                 vals = (
-                    resultado["locales"][resultado["locales"]["metrica"] == metrica]
+                    loc[loc["metrica"] == metrica]
                     .set_index("nodo")
                     .reindex(nodos_locales)["media"]
                 )
                 ax.plot(x, vals, marker="o", linewidth=2,
                         color=color, label=nombre)
-            ax.set_title(metrica, fontsize=9, fontweight="bold")
+            titulo_m = metrica.replace("_franja_", "\n[") + ("]" if "_franja_" in metrica else "")
+            ax.set_title(titulo_m, fontsize=8, fontweight="bold")
             ax.set_xticks(x)
             ax.set_xticklabels(etq, fontsize=8)
             ax.grid(True, alpha=0.25)
@@ -2311,58 +2180,81 @@ def comparar_dos_modelos(
             axes[j].axis("off")
 
         fig.suptitle(
-            f"Comparación local: {nombre_a} vs {nombre_b}",
+            f"Comparación local{titulo_suf}: {nombre_a} vs {nombre_b}",
             fontsize=13, fontweight="bold"
         )
         plt.tight_layout()
         plt.show()
-    else:
-        print("comparar_dos_modelos: sin métricas o nodos locales comunes.")
 
-    # ── Gráfico global ───────────────────────────────────────
-    if metricas_globales:
-        # Separar tamaños y tiempos automáticamente
-        met_tam = [m for m in metricas_globales
-                   if _clasificar_metrica(m) in ("tamano", "otro")]
-        met_tpo = [m for m in metricas_globales
-                   if _clasificar_metrica(m) == "tiempo"]
+    # ── Gráficos locales ─────────────────────────────────────
+    graficar_bloque(metricas_base)
 
-        for subtitulo, lista in [("Tamaños y tasas", met_tam),
-                                  ("Tiempos",        met_tpo)]:
-            if not lista:
-                continue
-            fig, ax = plt.subplots(
-                figsize=(max(8, len(lista) * 1.5), 4.5)
-            )
-            x = np.arange(len(lista))
-            for i, (color, nombre, resultado) in enumerate([
-                (colores[0], nombre_a, resultado_a),
-                (colores[1], nombre_b, resultado_b),
-            ]):
-                vals = (
-                    resultado["globales"][
-                        (resultado["globales"]["metrica"].isin(lista)) &
-                        (resultado["globales"]["nodo"] == nodo_global)
-                    ]
-                    .set_index("metrica")
-                    .reindex(lista)["media"]
-                )
-                ax.bar(x + (i - 0.5) * 0.35, vals,
-                       width=0.35, color=color, label=nombre)
-            ax.set_xticks(x)
-            ax.set_xticklabels(lista, rotation=30, ha="right", fontsize=9)
-            ax.set_title(
-                f"Comparación global — {subtitulo}: {nombre_a} vs {nombre_b}",
-                fontsize=12, fontweight="bold"
-            )
-            ax.legend()
-            ax.grid(axis="y", alpha=0.25)
-            plt.tight_layout()
-            plt.show()
-    else:
+    if incluir_franjas and metricas_franja:
+        # Un bloque por cada métrica base que tenga variante de franja
+        bases = sorted(set(m.split("_franja_")[0] for m in metricas_franja))
+        for base in bases:
+            mets = sorted(m for m in metricas_franja
+                          if m.startswith(base + "_franja_"))
+            graficar_bloque(mets, titulo_suf=f" — {base} por franja")
+
+    # ── Gráficos globales ────────────────────────────────────
+    if not metricas_globales:
         print("comparar_dos_modelos: sin métricas globales comunes.")
+        return
+
+    met_tam = [m for m in metricas_globales
+               if _clasificar_metrica(m) in ("tamano", "otro")]
+    met_tpo = [m for m in metricas_globales
+               if _clasificar_metrica(m) == "tiempo"]
+
+    for subtitulo, lista in [("Tamaños y tasas", met_tam),
+                              ("Tiempos",        met_tpo)]:
+        if not lista:
+            continue
+        fig, ax = plt.subplots(figsize=(max(8, len(lista) * 1.5), 4.5))
+        x = np.arange(len(lista))
+        for i, (color, nombre, glo) in enumerate([
+            (colores[0], nombre_a, glo_a),
+            (colores[1], nombre_b, glo_b),
+        ]):
+            vals = (
+                glo[(glo["metrica"].isin(lista)) & (glo["nodo"] == nodo_global)]
+                .set_index("metrica")
+                .reindex(lista)["media"]
+            )
+            ax.bar(x + (i - 0.5) * 0.35, vals,
+                   width=0.35, color=color, label=nombre)
+        ax.set_xticks(x)
+        ax.set_xticklabels(lista, rotation=30, ha="right", fontsize=9)
+        ax.set_title(
+            f"Comparación global — {subtitulo}: {nombre_a} vs {nombre_b}",
+            fontsize=12, fontweight="bold"
+        )
+        ax.legend()
+        ax.grid(axis="y", alpha=0.25)
+        plt.tight_layout()
+        plt.show()
 
 
+# ── Envoltorios específicos ───────────────────────────────────
+
+def comparar_modelo5_modelo6(resultado_m5, resultado_m6,
+                              metricas_locales=None, metricas_globales=None):
+    comparar_dos_modelos(resultado_m5, "Modelo 5",
+                         resultado_m6, "Modelo 6",
+                         metricas_locales=metricas_locales,
+                         metricas_globales=metricas_globales)
+
+def comparar_modelo6_modelo7(resultado_m6, resultado_m7,
+                              metricas_locales=None, metricas_globales=None):
+    comparar_dos_modelos(resultado_m6, "Modelo 6",
+                         resultado_m7, "Modelo 7",
+                         metricas_locales=metricas_locales,
+                         metricas_globales=metricas_globales)
+
+#==========================================================================
+# GRAFICAR MÉTRICAS GLOBALSE POR PERFIL Y FRANJA
+#==========================================================================
 def graficar_global_perfil_x_franja(
     resultado_mc,
     perfiles,
