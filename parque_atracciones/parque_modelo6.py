@@ -760,7 +760,24 @@ def prueba_rapida_modelo6(tiempo_limite=120, semilla=123):
 # ------------------------------------------------------------
 # 7. Visualización específica del Modelo 6
 # ------------------------------------------------------------
+def tabla_global_modelo6(resultado_mc, nodos=None, mostrar="ic", decimales=3):
+    return tabla_mc_por_nodo(
+        resultado_mc["globales"],
+        nodos=nodos,
+        patron_metrica=None,
+        mostrar=mostrar,
+        decimales=decimales,
+    )
 
+def tabla_local_modelo6(resultado_mc, patron_metrica=None, mostrar="ic", decimales=3):
+    return tabla_mc_por_nodo(
+        resultado_mc["locales"],
+        nodos=None,
+        patron_metrica=patron_metrica,
+        mostrar=mostrar,
+        decimales=decimales,
+    )
+  
 def tabla_local_franja_modelo6(
     resultado_mc,
     franja,
